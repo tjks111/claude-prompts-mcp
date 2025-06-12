@@ -90,8 +90,13 @@ Your deployed server includes:
 ### Environment Variables:
 You can set these in Railway's dashboard:
 - `NODE_ENV=production` (automatically set)
-- `PORT` (automatically set by Railway)
+- `PORT` (automatically set by Railway, defaults to 8080)
 - `MCP_PROMPTS_CONFIG_PATH` (optional: custom config path)
+
+### Port Configuration:
+- **Railway**: Uses `PORT` environment variable (typically 8080)
+- **Local Development**: Uses port 12000 (from config.json)
+- **Railway Config**: Uses config.railway.json with `PORT` variable
 
 ## 🔍 Monitoring
 
