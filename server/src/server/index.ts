@@ -92,12 +92,12 @@ export class ServerManager {
 
     // Start listening
     await new Promise<void>((resolve, reject) => {
-      this.httpServer!.listen(this.port, () => {
+      this.httpServer!.listen(this.port, "0.0.0.0", () => {
         this.logger.info(
-          `MCP Prompts Server running on http://localhost:${this.port}`
+          `MCP Prompts Server running on http://0.0.0.0:${this.port}`
         );
         this.logger.info(
-          `Connect to http://localhost:${this.port}/mcp for MCP connections`
+          `Connect to http://0.0.0.0:${this.port}/mcp for MCP connections`
         );
         resolve();
       });

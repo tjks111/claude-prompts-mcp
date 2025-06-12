@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCP SSE Test</title>
+</head>
+<body>
+    <h1>MCP Server-Sent Events Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        
+        // Test SSE connection
+        const eventSource = new EventSource('https://work-1-pxksckciarwugnmy.prod-runtime.all-hands.dev/mcp');
+        
+        eventSource.onopen = function(event) {
+            statusDiv.innerHTML = '<span style="color: green;">✅ Connected to MCP Server</span>';
+            console.log('SSE connection opened:', event);
+        };
+        
+        eventSource.onmessage = function(event) {
+            console.log('Received message:', event.data);
+            messagesDiv.innerHTML += '<div>Message: ' + event.data + '</div>';
+        };
+        
+        eventSource.addEventListener('endpoint', function(event) {
+            console.log('Received endpoint event:', event.data);
+            messagesDiv.innerHTML += '<div style="color: blue;">Endpoint: ' + event.data + '</div>';
+        });
+        
+        eventSource.onerror = function(event) {
+            statusDiv.innerHTML = '<span style="color: red;">❌ Connection error</span>';
+            console.error('SSE error:', event);
+        };
+        
+        // Test CORS and iframe capabilities
+        fetch('https://work-1-pxksckciarwugnmy.prod-runtime.all-hands.dev/health')
+            .then(response => response.json())
+            .then(data => {
+                messagesDiv.innerHTML += '<div style="color: green;">✅ CORS test successful: ' + JSON.stringify(data) + '</div>';
+            })
+            .catch(error => {
+                messagesDiv.innerHTML += '<div style="color: red;">❌ CORS test failed: ' + error + '</div>';
+            });
+    </script>
+</body>
+</html>

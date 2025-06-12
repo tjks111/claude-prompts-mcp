@@ -69,14 +69,18 @@ export class ApiManager {
    * Setup Express middleware
    */
   private setupMiddleware(app: express.Application): void {
-    // Enable CORS for Cursor integration
+    // Enable CORS for Cursor integration and iframe access
     app.use((req, res, next) => {
       res.header("Access-Control-Allow-Origin", "*");
-      res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+      res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE, PUT, PATCH");
       res.header(
         "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept"
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control"
       );
+      res.header("Access-Control-Allow-Credentials", "true");
+      // Allow iframe embedding
+      res.header("X-Frame-Options", "ALLOWALL");
+      res.header("Content-Security-Policy", "frame-ancestors *");
       if (req.method === "OPTIONS") {
         return res.sendStatus(200);
       }

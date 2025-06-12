@@ -2,15 +2,15 @@
   "server": {
     "name": "Claude Custom Prompts",
     "version": "1.0.0",
-    "port": 9090
+    "port": 12000
   },
   "prompts": {
     "file": "promptsConfig.json",
     "registrationMode": "name"
   },
   "transports": {
-    "default": "stdio",
-    "sse": { "enabled": false },
+    "default": "sse",
+    "sse": { "enabled": true },
     "stdio": { "enabled": true }
   },
   "logging": {
