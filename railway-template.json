@@ -10,9 +10,7 @@
         "branch": "configure-sse-streamable-http"
       },
       "build": {
-        "builder": "NIXPACKS",
-        "buildCommand": "cd server && npm ci && npm run build",
-        "startCommand": "cd server && npm run start:railway"
+        "builder": "NIXPACKS"
       },
       "deploy": {
         "healthcheckPath": "/health",

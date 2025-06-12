@@ -4,14 +4,17 @@ FROM node:20-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY server/package*.json ./
+# Copy root package.json first
+COPY package.json ./
+
+# Copy server package files
+COPY server/package*.json ./server/
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm run install
 
-# Copy source code
-COPY server/ ./
+# Copy all source code
+COPY . .
 
 # Build the application
 RUN npm run build
@@ -24,4 +27,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Start the server
-CMD ["npm", "run", "start:railway"]
+CMD ["npm", "start"]

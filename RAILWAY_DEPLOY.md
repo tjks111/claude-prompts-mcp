@@ -108,19 +108,30 @@ curl https://your-app-name.railway.app/prompts
 ## 🚨 Troubleshooting
 
 ### Build Issues:
-- Check Railway logs in the dashboard
-- Ensure all dependencies are in `package.json`
-- Verify TypeScript compiles locally
+- **Nixpacks Detection**: Repository now includes root `package.json` for proper Node.js detection
+- **Dependencies**: All dependencies are automatically installed from `server/package.json`
+- **TypeScript**: Build process automatically compiles TypeScript to JavaScript
+- **Logs**: Check Railway deployment logs for detailed error messages
+
+### Common Build Fixes:
+```bash
+# If build fails, try these locally first:
+npm run install  # Install dependencies
+npm run build    # Build TypeScript
+npm start        # Test the server
+```
 
 ### Connection Issues:
-- Verify the URL is accessible
+- Verify the URL is accessible: `https://your-app.railway.app/health`
 - Check CORS settings if connecting from browser
 - Ensure SSE is supported by your client
+- Test with curl: `curl https://your-app.railway.app/prompts`
 
 ### Performance:
 - Railway provides automatic scaling
 - Monitor usage in Railway dashboard
 - Consider upgrading plan for high traffic
+- Health checks run every 30 seconds on `/health`
 
 ## 💡 Tips
 
