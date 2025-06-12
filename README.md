@@ -108,13 +108,25 @@ This is what **conversational AI infrastructure** looks like – where the bound
 </tr>
 </table>
 
-## 🎯 One-Command Installation
+## 🎯 Quick Start Options
 
-Get your AI command center running in **under a minute**:
+### 🚀 Deploy to Railway (Recommended)
+
+Get your MCP server running in the cloud with **one click**:
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/claude-prompts-mcp)
+
+✅ **Automatic HTTPS** • ✅ **Auto-scaling** • ✅ **Zero config** • ✅ **Free tier available**
+
+[📖 Railway Deployment Guide](RAILWAY_DEPLOY.md)
+
+### 💻 Local Installation
+
+Get your AI command center running locally in **under a minute**:
 
 ```bash
 # Clone → Install → Launch → Profit! 🚀
-git clone https://github.com/minipuft/claude-prompts-mcp.git
+git clone https://github.com/tjks111/claude-prompts-mcp.git
 cd claude-prompts-mcp/server && npm install && npm run build && npm start
 ```
 
@@ -145,6 +157,16 @@ Configure your MCP client to connect via STDIO transport:
 - **Command**: `node`
 - **Args**: `["path/to/claude-prompts-mcp/server/dist/index.js"]`
 - **Environment**: `MCP_PROMPTS_CONFIG_PATH=path/to/promptsConfig.json`
+
+#### **Railway Cloud Deployment**
+
+For web-based MCP clients or HTTP connections:
+
+```javascript
+// Connect to your Railway deployment
+const mcpEndpoint = 'https://your-app-name.railway.app/mcp';
+const eventSource = new EventSource(mcpEndpoint);
+```
 
 > 💡 **Pro Tip**: Use absolute paths for bulletproof integration across all MCP clients!
 
