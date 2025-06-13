@@ -25,6 +25,49 @@ export class HttpMcpTransport {
   }
 
   /**
+   * Validate authentication for MCP requests
+   */
+  private validateAuthentication(req: Request): { isValid: boolean; error?: string } {
+    const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
+    
+    if (!authRequired) {
+      return { isValid: true };
+    }
+
+    // Check for Bearer token (OAuth or API key)
+    const authHeader = req.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { 
+        isValid: false, 
+        error: "Missing Authorization header with Bearer token" 
+      };
+    }
+    
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    
+    // First try OAuth token validation
+    const isValidOAuthToken = this.oauthServer.validateAccessToken(token);
+    if (isValidOAuthToken) {
+      this.logger.info("✅ OAuth 2.1 Bearer token authentication successful");
+      return { isValid: true };
+    }
+    
+    // Fallback to API key validation
+    const validApiKeys = (process.env.MCP_API_KEYS || '').split(',').filter(key => key.trim());
+    const isValidApiKey = validApiKeys.includes(token);
+    
+    if (isValidApiKey) {
+      this.logger.info("✅ API key authentication successful");
+      return { isValid: true };
+    }
+    
+    return { 
+      isValid: false, 
+      error: "Invalid or expired access token/API key" 
+    };
+  }
+
+  /**
    * Setup HTTP-based MCP endpoints
    */
   setupHttpTransport(app: express.Application): void {
@@ -76,10 +119,24 @@ export class HttpMcpTransport {
     // Handle GET requests to /mcp endpoint (for health checks and info)
     app.get("/mcp", (req: Request, res: Response) => {
       this.logger.info("GET request to /mcp endpoint from:", req.ip, "User-Agent:", req.get('User-Agent'));
+      
+      // Apply authentication to GET requests as well for consistency
+      const authResult = this.validateAuthentication(req);
+      if (!authResult.isValid) {
+        this.logger.warn("🔒 GET /mcp request rejected - authentication failed:", authResult.error);
+        res.status(401).json({
+          error: "Unauthorized",
+          message: authResult.error,
+          authRequired: process.env.MCP_REQUIRE_AUTH === 'true'
+        });
+        return;
+      }
+      
       res.json({
         message: "Claude Prompts MCP Server - HTTP Transport",
-        version: "1.0.2", // Force Railway redeploy - CI disabled
+        version: "1.0.3", // Updated version for auth fix
         transport: "http",
+        authenticated: process.env.MCP_REQUIRE_AUTH === 'true',
         endpoints: {
           mcp: "POST /mcp - Send MCP requests",
           messages: "POST /messages - Send MCP messages",
@@ -219,43 +276,25 @@ export class HttpMcpTransport {
         headers: req.headers
       });
 
-      // OAuth 2.1 Authentication (MCP Authorization Specification 2025-03-26)
+      // Authentication (OAuth 2.1 + API Key support)
       const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
-      console.error(`🔐 OAuth Authentication ${authRequired ? 'ENABLED' : 'DISABLED'}`);
+      console.error(`🔐 Authentication ${authRequired ? 'ENABLED' : 'DISABLED'}`);
 
-      if (authRequired) {
-        const authHeader = req.get('Authorization');
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          this.logger.warn("🔒 MCP request rejected - missing Bearer token");
-          res.status(401).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32001,
-              message: "Unauthorized - Bearer token required"
-            },
-            id: req.body?.id || null
-          });
-          return;
-        }
-        
-        const token = authHeader.substring(7); // Remove "Bearer " prefix
-        const isValidToken = this.oauthServer.validateAccessToken(token);
-        
-        if (!isValidToken) {
-          this.logger.warn("🔒 MCP request rejected - invalid access token");
-          res.status(401).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32001,
-              message: "Unauthorized - invalid or expired access token"
-            },
-            id: req.body?.id || null
-          });
-          return;
-        }
-        
-        this.logger.info("✅ OAuth 2.1 Bearer token authentication successful");
-      } else {
+      const authResult = this.validateAuthentication(req);
+      if (!authResult.isValid) {
+        this.logger.warn("🔒 MCP request rejected - authentication failed:", authResult.error);
+        res.status(401).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32001,
+            message: `Unauthorized - ${authResult.error}`
+          },
+          id: req.body?.id || null
+        });
+        return;
+      }
+      
+      if (!authRequired) {
         this.logger.info("🔓 Authentication disabled - allowing request");
       }
 
