@@ -21,9 +21,50 @@ export class HttpMcpTransport {
   setupHttpTransport(app: express.Application): void {
     this.logger.info("Setting up HTTP MCP transport endpoints");
 
+    // Handle GET requests to /mcp endpoint (for health checks and info)
+    app.get("/mcp", (req: Request, res: Response) => {
+      this.logger.info("GET request to /mcp endpoint");
+      res.json({
+        message: "Claude Prompts MCP Server - HTTP Transport",
+        version: "1.0.0",
+        transport: "http",
+        endpoints: {
+          mcp: "POST /mcp - Send MCP requests",
+          messages: "POST /messages - Send MCP messages",
+          health: "GET /health - Health check",
+          prompts: "GET /prompts - List all prompts"
+        },
+        usage: "Send MCP requests as JSON-RPC 2.0 messages to POST /mcp",
+        example: {
+          method: "POST",
+          url: "/mcp",
+          body: {
+            jsonrpc: "2.0",
+            method: "initialize",
+            params: {
+              protocolVersion: "2024-11-05",
+              capabilities: {},
+              clientInfo: { name: "test-client", version: "1.0.0" }
+            },
+            id: 1
+          }
+        }
+      });
+    });
+
     // Handle MCP requests via HTTP POST
     app.post("/mcp", express.json(), async (req: Request, res: Response) => {
       await this.handleMcpRequest(req, res);
+    });
+
+    // Handle GET requests to /messages endpoint (for info)
+    app.get("/messages", (req: Request, res: Response) => {
+      this.logger.info("GET request to /messages endpoint");
+      res.json({
+        message: "MCP Messages Endpoint",
+        usage: "Send MCP messages as JSON-RPC 2.0 to POST /messages",
+        transport: "http"
+      });
     });
 
     // Handle messages via HTTP POST
