@@ -7,6 +7,7 @@
     "install": "cd server && npm ci",
     "build": "cd server && npm run build",
     "start": "cd server && npm run start:railway",
+    "start:railway": "cd server && npm run start:railway",
     "dev": "cd server && npm run dev",
     "test": "cd server && npm test"
   },
