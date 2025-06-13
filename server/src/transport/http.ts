@@ -5,14 +5,23 @@
 
 import express, { Request, Response } from "express";
 import { Logger } from "../logging/index.js";
+import { McpOAuthServer } from "../auth/index.js";
 
 export class HttpMcpTransport {
   private logger: Logger;
   private mcpServer: any;
+  private oauthServer: McpOAuthServer;
 
   constructor(logger: Logger, mcpServer: any) {
     this.logger = logger;
     this.mcpServer = mcpServer;
+    
+    // Initialize OAuth server with base URL
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : process.env.BASE_URL || "http://localhost:8080";
+    
+    this.oauthServer = new McpOAuthServer(logger, baseUrl);
   }
 
   /**
@@ -61,6 +70,9 @@ export class HttpMcpTransport {
     // Add JSON parsing middleware globally with error handling
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true }));
+
+    // Setup OAuth 2.1 endpoints (MCP Authorization Specification 2025-03-26)
+    this.oauthServer.setupOAuthEndpoints(app);
 
     // Handle GET requests to /mcp endpoint (for health checks and info)
     app.get("/mcp", (req: Request, res: Response) => {
@@ -169,29 +181,44 @@ export class HttpMcpTransport {
         headers: req.headers
       });
 
-      // TEMPORARILY DISABLE AUTH FOR DEBUGGING
-      const authRequired = false; // process.env.MCP_REQUIRE_AUTH === 'true';
-      console.error("🔓 Authentication temporarily DISABLED for debugging");
-      
+      // OAuth 2.1 Authentication (MCP Authorization Specification 2025-03-26)
+      const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
+      console.error(`🔐 OAuth Authentication ${authRequired ? 'ENABLED' : 'DISABLED'}`);
+
       if (authRequired) {
-        const apiKey = req.get('X-API-Key') || req.get('Authorization')?.replace('Bearer ', '');
-        const expectedKey = process.env.MCP_API_KEY;
-        
-        if (!apiKey || !expectedKey || apiKey !== expectedKey) {
-          this.logger.warn("🔒 MCP request rejected - invalid or missing API key");
+        const authHeader = req.get('Authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          this.logger.warn("🔒 MCP request rejected - missing Bearer token");
           res.status(401).json({
             jsonrpc: "2.0",
             error: {
               code: -32001,
-              message: "Unauthorized - valid API key required"
+              message: "Unauthorized - Bearer token required"
             },
             id: req.body?.id || null
           });
           return;
         }
-        this.logger.info("🔓 MCP request authenticated successfully");
+        
+        const token = authHeader.substring(7); // Remove "Bearer " prefix
+        const isValidToken = this.oauthServer.validateAccessToken(token);
+        
+        if (!isValidToken) {
+          this.logger.warn("🔒 MCP request rejected - invalid access token");
+          res.status(401).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32001,
+              message: "Unauthorized - invalid or expired access token"
+            },
+            id: req.body?.id || null
+          });
+          return;
+        }
+        
+        this.logger.info("✅ OAuth 2.1 Bearer token authentication successful");
       } else {
-        this.logger.info("🔓 MCP authentication disabled - allowing request");
+        this.logger.info("🔓 Authentication disabled - allowing request");
       }
 
       const request = req.body;
