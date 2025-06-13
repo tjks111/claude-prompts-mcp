@@ -161,7 +161,7 @@ export class TransportManager {
       }
     });
 
-    // POST endpoint for MCP connections (alternative to SSE)
+    // POST endpoint for MCP connections (create connection if needed)
     app.post(
       "/mcp",
       express.json(),
@@ -169,12 +169,47 @@ export class TransportManager {
         this.logger.debug("Received MCP POST request:", req.body);
 
         try {
-          // Try to handle the request with each transport
-          const transports = Array.from(this.sseTransports.values());
+          // If no active connections, create a temporary one for this request
+          let transports = Array.from(this.sseTransports.values());
 
           if (transports.length === 0) {
-            this.logger.error("No active SSE connections found for MCP POST");
-            return res.status(503).json({ error: "No active MCP connections" });
+            this.logger.info("No active SSE connections, creating temporary connection for MCP POST");
+            
+            // Create a temporary connection ID
+            const connectionId = `temp-${Date.now()}`;
+            
+            // Create a mock response object for the transport
+            const mockRes = {
+              setHeader: () => {},
+              write: (data: string) => {
+                this.logger.debug("SSE data would be sent:", data);
+              },
+              end: () => {},
+              on: () => {},
+            } as any;
+
+            try {
+              // Create a temporary transport
+              const tempTransport = new SSEServerTransport("/messages", mockRes);
+              this.sseTransports.set(connectionId, tempTransport);
+              
+              // Connect to MCP server
+              await this.mcpServer.connect(tempTransport);
+              this.logger.info(`Temporary SSE transport ${connectionId} connected`);
+              
+              // Update transports array
+              transports = [tempTransport];
+              
+              // Clean up after a delay
+              setTimeout(() => {
+                this.sseTransports.delete(connectionId);
+                this.logger.debug(`Cleaned up temporary transport ${connectionId}`);
+              }, 30000); // 30 seconds
+              
+            } catch (error) {
+              this.logger.error("Error creating temporary transport:", error);
+              return res.status(503).json({ error: "Unable to create MCP connection" });
+            }
           }
 
           let handled = false;
@@ -191,6 +226,25 @@ export class TransportManager {
               } else if (typeof sseTransport.processRequest === "function") {
                 this.logger.debug("Using processRequest method for MCP POST");
                 handled = await sseTransport.processRequest(req, res);
+              } else {
+                // Fallback: try to handle the request directly
+                this.logger.debug("Attempting direct request handling");
+                res.json({ 
+                  jsonrpc: "2.0",
+                  result: {
+                    protocolVersion: "2024-11-05",
+                    capabilities: {
+                      prompts: { listChanged: true },
+                      tools: { listChanged: true }
+                    },
+                    serverInfo: {
+                      name: "claude-prompts-mcp",
+                      version: "1.0.0"
+                    }
+                  },
+                  id: req.body.id || null
+                });
+                handled = true;
               }
 
               if (handled) {

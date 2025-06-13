@@ -123,6 +123,13 @@ export class ApiManager {
       );
     });
 
+    // Handle POST requests to root path (redirect to /mcp)
+    app.post("/", express.json(), (req: Request, res: Response) => {
+      this.logger.debug("POST request to root path, redirecting to /mcp");
+      // Redirect POST requests from root to /mcp endpoint
+      res.redirect(307, "/mcp");
+    });
+
     // Health check endpoint
     app.get("/health", (_req: Request, res: Response) => {
       const config = this.configManager.getConfig();
