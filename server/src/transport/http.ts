@@ -233,10 +233,16 @@ export class HttpMcpTransport {
    */
   private async getPromptsFromServer(): Promise<any[]> {
     try {
-      // Access the MCP server's prompt handlers
-      if (this.mcpServer && this.mcpServer.listPrompts) {
-        const result = await this.mcpServer.listPrompts();
-        return result.prompts || [];
+      // Access the MCP server's registered prompts directly
+      if (this.mcpServer && this.mcpServer._registeredPrompts) {
+        const prompts = Object.entries(this.mcpServer._registeredPrompts).map(([name, prompt]: [string, any]) => {
+          return {
+            name,
+            description: prompt.description,
+            arguments: prompt.argsSchema ? this.promptArgumentsFromSchema(prompt.argsSchema) : undefined,
+          };
+        });
+        return prompts;
       }
       return [];
     } catch (error) {
@@ -246,12 +252,59 @@ export class HttpMcpTransport {
   }
 
   /**
+   * Convert schema to prompt arguments format
+   */
+  private promptArgumentsFromSchema(schema: any): any {
+    // This is a simplified version of the schema conversion
+    // In a real implementation, you'd want to properly convert the Zod schema
+    try {
+      if (schema && schema._def && schema._def.shape) {
+        const shape = schema._def.shape();
+        const properties: any = {};
+        const required: string[] = [];
+        
+        for (const [key, value] of Object.entries(shape)) {
+          properties[key] = { type: "string" }; // Simplified - should properly detect types
+          if (!(value as any).isOptional()) {
+            required.push(key);
+          }
+        }
+        
+        return {
+          type: "object",
+          properties,
+          required: required.length > 0 ? required : undefined,
+        };
+      }
+    } catch (error) {
+      this.logger.warn("Error converting schema to prompt arguments:", error);
+    }
+    return undefined;
+  }
+
+  /**
    * Get specific prompt from MCP server
    */
   private async getPromptFromServer(name: string, args: any): Promise<any> {
     try {
-      if (this.mcpServer && this.mcpServer.getPrompt) {
-        return await this.mcpServer.getPrompt({ name, arguments: args });
+      if (this.mcpServer && this.mcpServer._registeredPrompts) {
+        const prompt = this.mcpServer._registeredPrompts[name];
+        if (!prompt) {
+          throw new Error(`Prompt ${name} not found`);
+        }
+        
+        // Validate arguments if schema exists
+        if (prompt.argsSchema && args) {
+          const parseResult = await prompt.argsSchema.safeParseAsync(args);
+          if (!parseResult.success) {
+            throw new Error(`Invalid arguments for prompt ${name}: ${parseResult.error.message}`);
+          }
+          args = parseResult.data;
+        }
+        
+        // Call the prompt callback
+        const result = await prompt.callback(args || {});
+        return result;
       }
       throw new Error("Prompt handler not available");
     } catch (error) {
@@ -265,9 +318,15 @@ export class HttpMcpTransport {
    */
   private async getToolsFromServer(): Promise<any[]> {
     try {
-      if (this.mcpServer && this.mcpServer.listTools) {
-        const result = await this.mcpServer.listTools();
-        return result.tools || [];
+      if (this.mcpServer && this.mcpServer._registeredTools) {
+        const tools = Object.entries(this.mcpServer._registeredTools).map(([name, tool]: [string, any]) => {
+          return {
+            name,
+            description: tool.description,
+            inputSchema: tool.argsSchema ? this.schemaToJsonSchema(tool.argsSchema) : undefined,
+          };
+        });
+        return tools;
       }
       return [];
     } catch (error) {
@@ -277,12 +336,58 @@ export class HttpMcpTransport {
   }
 
   /**
+   * Convert Zod schema to JSON schema format
+   */
+  private schemaToJsonSchema(schema: any): any {
+    // Simplified schema conversion
+    try {
+      if (schema && schema._def && schema._def.shape) {
+        const shape = schema._def.shape();
+        const properties: any = {};
+        const required: string[] = [];
+        
+        for (const [key, value] of Object.entries(shape)) {
+          properties[key] = { type: "string" }; // Simplified
+          if (!(value as any).isOptional()) {
+            required.push(key);
+          }
+        }
+        
+        return {
+          type: "object",
+          properties,
+          required: required.length > 0 ? required : undefined,
+        };
+      }
+    } catch (error) {
+      this.logger.warn("Error converting schema:", error);
+    }
+    return { type: "object" };
+  }
+
+  /**
    * Call tool on MCP server
    */
   private async callToolOnServer(name: string, args: any): Promise<any> {
     try {
-      if (this.mcpServer && this.mcpServer.callTool) {
-        return await this.mcpServer.callTool({ name, arguments: args });
+      if (this.mcpServer && this.mcpServer._registeredTools) {
+        const tool = this.mcpServer._registeredTools[name];
+        if (!tool) {
+          throw new Error(`Tool ${name} not found`);
+        }
+        
+        // Validate arguments if schema exists
+        if (tool.argsSchema && args) {
+          const parseResult = await tool.argsSchema.safeParseAsync(args);
+          if (!parseResult.success) {
+            throw new Error(`Invalid arguments for tool ${name}: ${parseResult.error.message}`);
+          }
+          args = parseResult.data;
+        }
+        
+        // Call the tool callback
+        const result = await tool.callback(args || {});
+        return result;
       }
       throw new Error("Tool handler not available");
     } catch (error) {
