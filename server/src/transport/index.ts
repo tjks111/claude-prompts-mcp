@@ -16,6 +16,7 @@ import { HttpMcpTransport } from "./http.js";
 export enum TransportType {
   STDIO = "stdio",
   SSE = "sse",
+  HTTP = "http",
 }
 
 /**
@@ -27,6 +28,7 @@ export class TransportManager {
   private mcpServer: any;
   private transport: string;
   private sseTransports: Map<string, SSEServerTransport> = new Map();
+  private httpTransport?: HttpMcpTransport;
 
   constructor(
     logger: Logger,
@@ -50,9 +52,17 @@ export class TransportManager {
     const transportArg = args.find((arg: string) =>
       arg.startsWith("--transport=")
     );
-    return transportArg
-      ? transportArg.split("=")[1]
-      : configManager.getConfig().transports.default;
+    
+    if (transportArg) {
+      return transportArg.split("=")[1];
+    }
+    
+    // For Railway deployment, default to HTTP transport
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
+      return TransportType.HTTP;
+    }
+    
+    return configManager.getConfig().transports.default;
   }
 
   /**
@@ -123,15 +133,7 @@ export class TransportManager {
     });
   }
 
-  /**
-   * Setup HTTP transport (simpler alternative to SSE)
-   */
-  setupHttpTransport(app: express.Application): void {
-    this.logger.info("Setting up HTTP MCP transport (Railway-optimized)");
-    
-    const httpTransport = new HttpMcpTransport(this.logger, this.mcpServer);
-    httpTransport.setupHttpTransport(app);
-  }
+
 
   /**
    * Setup SSE transport with Express integration
@@ -142,7 +144,9 @@ export class TransportManager {
     // For Railway, use HTTP transport instead of SSE
     if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
       this.logger.info("Railway environment detected, using HTTP transport instead of SSE");
-      this.setupHttpTransport(app);
+      // Create HTTP transport instance
+      this.httpTransport = new HttpMcpTransport(this.logger, this.mcpServer);
+      this.httpTransport.setupHttpTransport(app);
       return;
     }
 
@@ -263,6 +267,28 @@ export class TransportManager {
    */
   isSse(): boolean {
     return this.transport === TransportType.SSE;
+  }
+
+  /**
+   * Check if transport is HTTP
+   */
+  isHttp(): boolean {
+    return this.transport === TransportType.HTTP;
+  }
+
+  /**
+   * Setup HTTP transport with Express integration
+   */
+  setupHttpTransport(app: express.Application): void {
+    this.logger.info("Setting up HTTP MCP transport endpoints");
+
+    // Create HTTP transport instance
+    this.httpTransport = new HttpMcpTransport(this.logger, this.mcpServer);
+
+    // Setup HTTP transport endpoints
+    this.httpTransport.setupHttpTransport(app);
+
+    this.logger.info("HTTP MCP transport endpoints configured successfully");
   }
 
   /**

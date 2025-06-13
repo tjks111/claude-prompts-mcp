@@ -23,6 +23,7 @@ const DEFAULT_CONFIG: Config = {
     default: "sse",
     sse: { enabled: true },
     stdio: { enabled: true },
+    http: { enabled: true },
   },
 };
 

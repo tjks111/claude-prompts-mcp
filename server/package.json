@@ -23,7 +23,7 @@
     "start:debug": "node dist/index.js --debug-startup",
     "start:production": "node dist/index.js --quiet --transport=sse",
     "start:development": "node dist/index.js --verbose --transport=sse",
-    "start:railway": "node dist/index.js --quiet --transport=sse",
+    "start:railway": "node dist/index.js --quiet --transport=http",
     "help": "node dist/index.js --help",
     "test": "node test-server.js",
     "prepublishOnly": "npm run build"

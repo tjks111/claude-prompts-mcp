@@ -579,7 +579,7 @@ ${attemptedPaths}
         this.promptExecutor.updatePrompts(this.convertedPrompts);
       }
       if (this.apiManager) {
-        // apiManager might not exist for stdio
+        // apiManager exists for SSE and HTTP transports
         this.apiManager.updateData(
           this.promptsData,
           this.categories,
@@ -671,8 +671,8 @@ ${attemptedPaths}
       transport
     );
 
-    // Create API manager for SSE transport
-    if (this.transportManager.isSse()) {
+    // Create API manager for SSE and HTTP transport
+    if (this.transportManager.isSse() || this.transportManager.isHttp()) {
       this.apiManager = createApiManager(
         this.logger,
         this.configManager,
@@ -754,7 +754,7 @@ ${attemptedPaths}
       }
 
       if (this.apiManager) {
-        // The API manager is only available for the SSE transport.
+        // The API manager is available for SSE and HTTP transports.
         this.apiManager.updateData(
           this.promptsData,
           this.categories,

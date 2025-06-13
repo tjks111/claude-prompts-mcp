@@ -359,9 +359,9 @@ function parseCommandLineArgs(): { shouldExit: boolean; exitCode: number } {
   const transportArg = args.find((arg) => arg.startsWith("--transport="));
   if (transportArg) {
     const transport = transportArg.split("=")[1];
-    if (!["stdio", "sse"].includes(transport)) {
+    if (!["stdio", "sse", "http"].includes(transport)) {
       console.error(
-        `Error: Invalid transport '${transport}'. Supported: stdio, sse`
+        `Error: Invalid transport '${transport}'. Supported: stdio, sse, http`
       );
       console.error("Use --help for usage information");
       return { shouldExit: true, exitCode: 1 };

@@ -49,6 +49,8 @@ export class ServerManager {
         await this.startStdioServer();
       } else if (this.transportManager.isSse()) {
         await this.startSseServer();
+      } else if (this.transportManager.isHttp()) {
+        await this.startHttpServer();
       } else {
         throw new Error(
           `Unsupported transport type: ${this.transportManager.getTransportType()}`
@@ -95,6 +97,51 @@ export class ServerManager {
       this.httpServer!.listen(this.port, "0.0.0.0", () => {
         this.logger.info(
           `MCP Prompts Server running on http://0.0.0.0:${this.port}`
+        );
+        this.logger.info(
+          `Connect to http://0.0.0.0:${this.port}/mcp for MCP connections`
+        );
+        resolve();
+      });
+
+      this.httpServer!.on("error", (error: any) => {
+        if (error.code === "EADDRINUSE") {
+          this.logger.error(
+            `Port ${this.port} is already in use. Please choose a different port or stop the other service.`
+          );
+        } else {
+          this.logger.error("Server error:", error);
+        }
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Start server with HTTP transport
+   */
+  private async startHttpServer(): Promise<void> {
+    if (!this.apiManager) {
+      throw new Error("API Manager is required for HTTP transport");
+    }
+
+    // Create Express app
+    const app = this.apiManager.createApp();
+
+    // Setup HTTP transport endpoints
+    this.transportManager.setupHttpTransport(app);
+
+    // Create HTTP server
+    this.httpServer = createServer(app);
+
+    // Setup HTTP server event handlers
+    this.setupHttpServerEventHandlers();
+
+    // Start listening
+    await new Promise<void>((resolve, reject) => {
+      this.httpServer!.listen(this.port, "0.0.0.0", () => {
+        this.logger.info(
+          `MCP Prompts Server running on http://0.0.0.0:${this.port} (HTTP transport)`
         );
         this.logger.info(
           `Connect to http://0.0.0.0:${this.port}/mcp for MCP connections`
@@ -206,7 +253,7 @@ export class ServerManager {
    */
   private finalizeShutdown(exitCode: number): void {
     // Close transport connections
-    if (this.transportManager.isSse()) {
+    if (this.transportManager.isSse() || this.transportManager.isHttp()) {
       this.transportManager.closeAllConnections();
     }
 
@@ -252,7 +299,7 @@ export class ServerManager {
       // For STDIO, we consider it running if the process is alive
       return true;
     } else {
-      // For SSE, check if HTTP server is listening
+      // For SSE and HTTP, check if HTTP server is listening
       return this.httpServer?.listening || false;
     }
   }
@@ -270,7 +317,7 @@ export class ServerManager {
     return {
       running: this.isRunning(),
       transport: this.transportManager.getTransportType(),
-      port: this.transportManager.isSse() ? this.port : undefined,
+      port: (this.transportManager.isSse() || this.transportManager.isHttp()) ? this.port : undefined,
       connections: this.transportManager.isSse()
         ? this.transportManager.getActiveConnectionsCount()
         : undefined,
