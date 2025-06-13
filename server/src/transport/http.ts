@@ -67,9 +67,8 @@ export class HttpMcpTransport {
       next();
     });
 
-    // Add JSON parsing middleware globally with error handling
-    app.use(express.json({ limit: '10mb' }));
-    app.use(express.urlencoded({ extended: true }));
+    // Note: JSON parsing middleware is already added by ApiManager
+    // We don't need to add it again here to avoid conflicts
 
     // Setup OAuth 2.1 endpoints (MCP Authorization Specification 2025-03-26)
     this.oauthServer.setupOAuthEndpoints(app);

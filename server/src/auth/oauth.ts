@@ -85,17 +85,17 @@ export class McpOAuthServer {
     });
 
     // Token endpoint
-    app.post("/token", express.json(), (req: Request, res: Response) => {
+    app.post("/token", (req: Request, res: Response) => {
       this.handleTokenRequest(req, res);
     });
 
     // Dynamic Client Registration (RFC 7591)
-    app.post("/register", express.json(), (req: Request, res: Response) => {
+    app.post("/register", (req: Request, res: Response) => {
       this.handleClientRegistration(req, res);
     });
 
     // Token introspection endpoint
-    app.post("/introspect", express.json(), (req: Request, res: Response) => {
+    app.post("/introspect", (req: Request, res: Response) => {
       this.handleTokenIntrospection(req, res);
     });
 
