@@ -385,56 +385,6 @@ function parseCommandLineArgs(): { shouldExit: boolean; exitCode: number } {
 }
 
 /**
- * Start a minimal health server immediately for Railway health checks
- * This allows Railway to pass health checks while the main application is starting
- */
-async function startEarlyHealthServer(): Promise<void> {
-  if (!process.env.PORT) {
-    console.error("⚠️ No PORT environment variable found, skipping early health server");
-    return;
-  }
-
-  const port = parseInt(process.env.PORT, 10);
-  const app = express();
-  
-  // Simple health endpoint that responds immediately
-  app.get('/health', (req, res) => {
-    res.json({ 
-      status: 'starting', 
-      message: 'MCP Server is initializing',
-      timestamp: new Date().toISOString()
-    });
-  });
-
-  // Basic info endpoints
-  app.get('/', (req, res) => {
-    res.json({ 
-      message: 'Claude Custom Prompts MCP Server - Starting up',
-      status: 'initializing'
-    });
-  });
-
-  const server = createServer(app);
-  
-  return new Promise<void>((resolve, reject) => {
-    server.listen(port, '0.0.0.0', () => {
-      console.error(`🏥 Early health server started on port ${port}`);
-      resolve();
-    });
-    
-    server.on('error', (error: any) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`⚠️ Port ${port} already in use, skipping early health server`);
-        resolve(); // Don't fail startup if port is busy
-      } else {
-        console.error('Early health server error:', error);
-        reject(error);
-      }
-    });
-  });
-}
-
-/**
  * Main application entry point with comprehensive error handling and validation
  */
 async function main(): Promise<void> {
@@ -449,6 +399,7 @@ async function main(): Promise<void> {
     setupErrorHandlers();
 
     // Use stderr for startup message to avoid interfering with stdio transport
+    const startTime = Date.now();
     console.error("Starting MCP Claude Prompts Server...");
     
     // Railway debugging - log environment info
@@ -457,13 +408,12 @@ async function main(): Promise<void> {
       console.error(`📡 Port: ${process.env.PORT || 'not set'}`);
       console.error(`🌐 Transport will be: http`);
       console.error(`🕐 Startup time: ${new Date().toISOString()}`);
-      
-      // Start a minimal health server immediately for Railway health checks
-      await startEarlyHealthServer();
     }
 
     // Initialize the application using the orchestrator
+    console.error("🔧 Initializing application orchestrator...");
     orchestrator = await startApplication();
+    console.error(`✅ Application orchestrator initialized in ${Date.now() - startTime}ms`);
 
     // Get logger reference for global error handling
     const modules = orchestrator.getModules();

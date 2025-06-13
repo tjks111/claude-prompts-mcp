@@ -125,6 +125,8 @@ export class ServerManager {
       throw new Error("API Manager is required for HTTP transport");
     }
 
+    console.error(`🌐 Starting HTTP server on port ${this.port} (from PORT env: ${process.env.PORT})`);
+
     // Create Express app
     const app = this.apiManager.createApp();
 
@@ -139,7 +141,9 @@ export class ServerManager {
 
     // Start listening
     await new Promise<void>((resolve, reject) => {
+      console.error(`🌐 Attempting to listen on 0.0.0.0:${this.port}...`);
       this.httpServer!.listen(this.port, "0.0.0.0", () => {
+        console.error(`✅ HTTP server listening on 0.0.0.0:${this.port}`);
         this.logger.info(
           `MCP Prompts Server running on http://0.0.0.0:${this.port} (HTTP transport)`
         );
@@ -150,11 +154,14 @@ export class ServerManager {
       });
 
       this.httpServer!.on("error", (error: any) => {
+        console.error(`❌ HTTP server error:`, error);
         if (error.code === "EADDRINUSE") {
+          console.error(`❌ Port ${this.port} is already in use`);
           this.logger.error(
             `Port ${this.port} is already in use. Please choose a different port or stop the other service.`
           );
         } else {
+          console.error(`❌ Server error code: ${error.code}, message: ${error.message}`);
           this.logger.error("Server error:", error);
         }
         reject(error);
