@@ -78,7 +78,7 @@ export class HttpMcpTransport {
       this.logger.info("GET request to /mcp endpoint from:", req.ip, "User-Agent:", req.get('User-Agent'));
       res.json({
         message: "Claude Prompts MCP Server - HTTP Transport",
-        version: "1.0.0",
+        version: "1.0.1", // Force Railway redeploy
         transport: "http",
         endpoints: {
           mcp: "POST /mcp - Send MCP requests",
@@ -105,6 +105,7 @@ export class HttpMcpTransport {
     });
 
     // EMERGENCY: Simple POST test endpoint
+    console.error("🚨 REGISTERING POST /test-post ENDPOINT");
     app.post("/test-post", (req: Request, res: Response) => {
       console.error("🚨 EMERGENCY POST TEST ENDPOINT HIT!");
       this.logger.info("🚨 EMERGENCY POST TEST ENDPOINT HIT!");
@@ -119,6 +120,7 @@ export class HttpMcpTransport {
     });
 
     // Handle MCP requests via HTTP POST
+    console.error("🚨 REGISTERING POST /mcp ENDPOINT");
     app.post("/mcp", async (req: Request, res: Response) => {
       console.error("🔥 POST /mcp request received!");
       this.logger.info("🔥 POST /mcp request received!");
