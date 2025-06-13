@@ -28,7 +28,7 @@ export class HttpMcpTransport {
    * Setup HTTP-based MCP endpoints
    */
   setupHttpTransport(app: express.Application): void {
-    this.logger.info("Setting up HTTP MCP transport endpoints");
+    this.logger.info("Setting up HTTP MCP transport endpoints with OAuth 2.1 support");
 
     // Add CORS and debugging middleware
     app.use((req: Request, res: Response, next) => {
