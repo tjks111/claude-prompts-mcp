@@ -72,17 +72,27 @@ export class ApplicationOrchestrator {
    */
   async startup(): Promise<void> {
     try {
+      console.error("🔧 Starting application orchestrator...");
+      
       // Phase 1: Core Foundation
+      console.error("📋 Phase 1: Initializing foundation...");
       await this.initializeFoundation();
+      console.error("✅ Phase 1 completed");
 
       // Phase 2: Data Loading and Processing
+      console.error("📋 Phase 2: Loading and processing data...");
       await this.loadAndProcessData();
+      console.error("✅ Phase 2 completed");
 
       // Phase 3: Module Initialization
+      console.error("📋 Phase 3: Initializing modules...");
       await this.initializeModules();
+      console.error("✅ Phase 3 completed");
 
       // Phase 4: Server Setup and Startup
+      console.error("📋 Phase 4: Starting server...");
       await this.startServer();
+      console.error("✅ Phase 4 completed");
 
       this.logger.info(
         "Application orchestrator startup completed successfully"
@@ -656,13 +666,16 @@ ${attemptedPaths}
    * Phase 4: Setup and start the server
    */
   private async startServer(): Promise<void> {
+    console.error("🌐 Determining transport...");
     // Determine transport
     const args = process.argv.slice(2);
     const transport = TransportManager.determineTransport(
       args,
       this.configManager
     );
+    console.error(`🌐 Transport determined: ${transport}`);
 
+    console.error("🔧 Creating transport manager...");
     // Create transport manager
     this.transportManager = createTransportManager(
       this.logger,
@@ -670,9 +683,11 @@ ${attemptedPaths}
       this.mcpServer,
       transport
     );
+    console.error("✅ Transport manager created");
 
     // Create API manager for SSE and HTTP transport
     if (this.transportManager.isSse() || this.transportManager.isHttp()) {
+      console.error("🔧 Creating API manager...");
       this.apiManager = createApiManager(
         this.logger,
         this.configManager,
@@ -681,13 +696,16 @@ ${attemptedPaths}
       );
 
       // Update API manager with current data
+      console.error("📊 Updating API manager with data...");
       this.apiManager.updateData(
         this.promptsData,
         this.categories,
         this.convertedPrompts
       );
+      console.error("✅ API manager ready");
     }
 
+    console.error("🚀 Starting MCP server...");
     // Start the server
     this.serverManager = await startMcpServer(
       this.logger,
@@ -695,6 +713,7 @@ ${attemptedPaths}
       this.transportManager,
       this.apiManager
     );
+    console.error("✅ MCP server started");
 
     this.logger.info("Server started successfully");
   }
