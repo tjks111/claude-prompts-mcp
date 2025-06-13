@@ -147,10 +147,19 @@ export class HttpMcpTransport {
   private async handleInitialize(req: Request, res: Response): Promise<void> {
     this.logger.info("Handling MCP initialize request");
     
+    const clientProtocolVersion = req.body.params?.protocolVersion;
+    this.logger.info("🔄 Client protocol version:", clientProtocolVersion);
+    
+    // Support both 2024-11-05 and 2025-03-26 protocol versions
+    const supportedVersions = ["2024-11-05", "2025-03-26"];
+    const protocolVersion = supportedVersions.includes(clientProtocolVersion) 
+      ? clientProtocolVersion 
+      : "2025-03-26"; // Default to latest
+    
     const response = {
       jsonrpc: "2.0",
       result: {
-        protocolVersion: "2024-11-05",
+        protocolVersion: protocolVersion,
         capabilities: {
           prompts: { listChanged: true },
           tools: { listChanged: true }
@@ -163,7 +172,7 @@ export class HttpMcpTransport {
       id: req.body.id || null
     };
 
-    console.error("🔄 Sending MCP initialize response:", JSON.stringify(response, null, 2));
+    this.logger.info("🔄 Sending MCP initialize response:", JSON.stringify(response, null, 2));
     res.json(response);
   }
 
