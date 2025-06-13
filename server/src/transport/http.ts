@@ -21,6 +21,47 @@ export class HttpMcpTransport {
   setupHttpTransport(app: express.Application): void {
     this.logger.info("Setting up HTTP MCP transport endpoints");
 
+    // Add CORS and debugging middleware
+    app.use((req: Request, res: Response, next) => {
+      // Enable CORS for all origins
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key');
+      
+      // Log all incoming requests
+      this.logger.info(`📥 ${req.method} ${req.path} from ${req.ip} - User-Agent: ${req.get('User-Agent')}`);
+      
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+        return;
+      }
+      
+      next();
+    });
+
+    // EMERGENCY DEBUG: Log ALL incoming requests at Express level
+    app.use((req: Request, res: Response, next) => {
+      console.error("🚨 EXPRESS REQUEST DEBUG:", {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        userAgent: req.get('User-Agent'),
+        contentType: req.get('Content-Type'),
+        host: req.get('Host'),
+        origin: req.get('Origin'),
+        ip: req.ip,
+        ips: req.ips,
+        headers: req.headers
+      });
+      next();
+    });
+
+    // Add JSON parsing middleware globally with error handling
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ extended: true }));
+
     // Handle GET requests to /mcp endpoint (for health checks and info)
     app.get("/mcp", (req: Request, res: Response) => {
       this.logger.info("GET request to /mcp endpoint from:", req.ip, "User-Agent:", req.get('User-Agent'));
@@ -53,7 +94,8 @@ export class HttpMcpTransport {
     });
 
     // Handle MCP requests via HTTP POST
-    app.post("/mcp", express.json(), async (req: Request, res: Response) => {
+    app.post("/mcp", async (req: Request, res: Response) => {
+      this.logger.info("🔥 POST /mcp request received!");
       await this.handleMcpRequest(req, res);
     });
 
@@ -68,12 +110,14 @@ export class HttpMcpTransport {
     });
 
     // Handle messages via HTTP POST
-    app.post("/messages", express.json(), async (req: Request, res: Response) => {
+    app.post("/messages", async (req: Request, res: Response) => {
+      this.logger.info("🔥 POST /messages request received!");
       await this.handleMcpRequest(req, res);
     });
 
     // Handle root POST requests
-    app.post("/", express.json(), async (req: Request, res: Response) => {
+    app.post("/", async (req: Request, res: Response) => {
+      this.logger.info("🔥 POST / request received!");
       await this.handleMcpRequest(req, res);
     });
   }
@@ -83,6 +127,28 @@ export class HttpMcpTransport {
    */
   private async handleMcpRequest(req: Request, res: Response): Promise<void> {
     try {
+      // EMERGENCY DEBUG: Log ALL incoming requests
+      console.error("🚨 INCOMING REQUEST DEBUG:", {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        userAgent: req.get('User-Agent'),
+        contentType: req.get('Content-Type'),
+        contentLength: req.get('Content-Length'),
+        host: req.get('Host'),
+        origin: req.get('Origin'),
+        referer: req.get('Referer'),
+        allHeaders: req.headers,
+        bodyExists: !!req.body,
+        bodyType: typeof req.body,
+        bodyContent: req.body ? JSON.stringify(req.body, null, 2) : 'NO BODY',
+        rawBody: req.body,
+        query: req.query,
+        params: req.params
+      });
+
       // Enhanced logging for OpenAI MCP debugging
       console.error("🔍 MCP Request received:", {
         method: req.method,
@@ -103,8 +169,10 @@ export class HttpMcpTransport {
         headers: req.headers
       });
 
-      // Check for authentication (optional - can be disabled for testing)
-      const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
+      // TEMPORARILY DISABLE AUTH FOR DEBUGGING
+      const authRequired = false; // process.env.MCP_REQUIRE_AUTH === 'true';
+      console.error("🔓 Authentication temporarily DISABLED for debugging");
+      
       if (authRequired) {
         const apiKey = req.get('X-API-Key') || req.get('Authorization')?.replace('Bearer ', '');
         const expectedKey = process.env.MCP_API_KEY;
