@@ -54,15 +54,20 @@ export class TransportManager {
     );
     
     if (transportArg) {
-      return transportArg.split("=")[1];
+      const transport = transportArg.split("=")[1];
+      console.error(`🚀 Transport specified via argument: ${transport}`);
+      return transport;
     }
     
     // For Railway deployment, default to HTTP transport
     if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
+      console.error(`🚀 Railway environment detected, using HTTP transport (RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}, PORT: ${process.env.PORT})`);
       return TransportType.HTTP;
     }
     
-    return configManager.getConfig().transports.default;
+    const defaultTransport = configManager.getConfig().transports.default;
+    console.error(`🚀 Using default transport from config: ${defaultTransport}`);
+    return defaultTransport;
   }
 
   /**

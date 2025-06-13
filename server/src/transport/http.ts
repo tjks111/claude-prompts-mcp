@@ -23,7 +23,7 @@ export class HttpMcpTransport {
 
     // Handle GET requests to /mcp endpoint (for health checks and info)
     app.get("/mcp", (req: Request, res: Response) => {
-      this.logger.info("GET request to /mcp endpoint");
+      this.logger.info("GET request to /mcp endpoint from:", req.ip, "User-Agent:", req.get('User-Agent'));
       res.json({
         message: "Claude Prompts MCP Server - HTTP Transport",
         version: "1.0.0",

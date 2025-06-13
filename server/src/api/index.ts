@@ -131,9 +131,15 @@ export class ApiManager {
     });
 
     // Health check endpoint
-    app.get("/health", (_req: Request, res: Response) => {
+    app.get("/health", (req: Request, res: Response) => {
+      this.logger.info("Health check request from:", req.ip, "User-Agent:", req.get('User-Agent'));
       const config = this.configManager.getConfig();
-      res.json({ status: "ok", version: config.server.version });
+      res.json({ 
+        status: "ok", 
+        version: config.server.version,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      });
     });
   }
 
