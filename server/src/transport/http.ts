@@ -95,7 +95,7 @@ export class HttpMcpTransport {
             jsonrpc: "2.0",
             method: "initialize",
             params: {
-              protocolVersion: "2024-11-05",
+              protocolVersion: "2025-03-26",
               capabilities: {},
               clientInfo: { name: "test-client", version: "1.0.0" }
             },
@@ -105,8 +105,23 @@ export class HttpMcpTransport {
       });
     });
 
+    // EMERGENCY: Simple POST test endpoint
+    app.post("/test-post", (req: Request, res: Response) => {
+      console.error("🚨 EMERGENCY POST TEST ENDPOINT HIT!");
+      this.logger.info("🚨 EMERGENCY POST TEST ENDPOINT HIT!");
+      res.json({
+        success: true,
+        message: "POST request received successfully!",
+        method: req.method,
+        path: req.path,
+        body: req.body,
+        timestamp: new Date().toISOString()
+      });
+    });
+
     // Handle MCP requests via HTTP POST
     app.post("/mcp", async (req: Request, res: Response) => {
+      console.error("🔥 POST /mcp request received!");
       this.logger.info("🔥 POST /mcp request received!");
       await this.handleMcpRequest(req, res);
     });
