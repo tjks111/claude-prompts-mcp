@@ -103,6 +103,29 @@ export class HttpMcpTransport {
         headers: req.headers
       });
 
+      // Check for authentication (optional - can be disabled for testing)
+      const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
+      if (authRequired) {
+        const apiKey = req.get('X-API-Key') || req.get('Authorization')?.replace('Bearer ', '');
+        const expectedKey = process.env.MCP_API_KEY;
+        
+        if (!apiKey || !expectedKey || apiKey !== expectedKey) {
+          this.logger.warn("🔒 MCP request rejected - invalid or missing API key");
+          res.status(401).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32001,
+              message: "Unauthorized - valid API key required"
+            },
+            id: req.body?.id || null
+          });
+          return;
+        }
+        this.logger.info("🔓 MCP request authenticated successfully");
+      } else {
+        this.logger.info("🔓 MCP authentication disabled - allowing request");
+      }
+
       const request = req.body;
 
       // Handle different MCP request types
