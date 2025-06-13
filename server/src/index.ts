@@ -420,12 +420,14 @@ async function main(): Promise<void> {
     logger = modules.logger;
 
     // Validate initial startup
+    console.error("🔍 Validating application health...");
     const initialHealth = await validateApplicationHealth();
     if (!initialHealth) {
       throw new Error(
         "Initial health validation failed - application may not be properly initialized"
       );
     }
+    console.error(`✅ Application health validated in ${Date.now() - startTime}ms`);
 
     // Log successful startup with details
     if (logger) {
@@ -451,6 +453,9 @@ async function main(): Promise<void> {
       logger.info(
         "✅ Application initialization completed - all systems operational"
       );
+      
+      // Final startup completion log for Railway
+      console.error(`🎉 MCP Server fully operational in ${Date.now() - startTime}ms`);
     }
   } catch (error) {
     // Comprehensive error handling with rollback
