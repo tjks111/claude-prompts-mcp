@@ -161,6 +161,65 @@ export class TransportManager {
       }
     });
 
+    // POST endpoint for MCP connections (alternative to SSE)
+    app.post(
+      "/mcp",
+      express.json(),
+      async (req: Request, res: Response) => {
+        this.logger.debug("Received MCP POST request:", req.body);
+
+        try {
+          // Try to handle the request with each transport
+          const transports = Array.from(this.sseTransports.values());
+
+          if (transports.length === 0) {
+            this.logger.error("No active SSE connections found for MCP POST");
+            return res.status(503).json({ error: "No active MCP connections" });
+          }
+
+          let handled = false;
+          let lastError = null;
+
+          for (const transport of transports) {
+            try {
+              // Use any available method to process the request
+              const sseTransport = transport as any;
+
+              if (typeof sseTransport.handleRequest === "function") {
+                this.logger.debug("Using handleRequest method for MCP POST");
+                handled = await sseTransport.handleRequest(req, res);
+              } else if (typeof sseTransport.processRequest === "function") {
+                this.logger.debug("Using processRequest method for MCP POST");
+                handled = await sseTransport.processRequest(req, res);
+              }
+
+              if (handled) {
+                this.logger.debug("MCP POST request handled successfully");
+                break;
+              }
+            } catch (e) {
+              lastError = e;
+              this.logger.error("Error processing MCP POST request with transport:", e);
+            }
+          }
+
+          if (!handled) {
+            this.logger.error("No transport handled the MCP POST request");
+            if (lastError) {
+              this.logger.error("Last error:", lastError);
+            }
+            res.status(404).json({ error: "No matching transport found for MCP request" });
+          }
+        } catch (error) {
+          this.logger.error("Error handling MCP POST request:", error);
+          res.status(500).json({
+            error: "Internal server error",
+            details: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    );
+
     // Messages endpoint for SSE transport
     app.post(
       "/messages",
