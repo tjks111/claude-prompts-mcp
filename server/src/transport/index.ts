@@ -8,6 +8,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import express, { Request, Response } from "express";
 import { ConfigManager } from "../config/index.js";
 import { Logger } from "../logging/index.js";
+import { HttpMcpTransport } from "./http.js";
 
 /**
  * Transport types supported by the server
@@ -98,9 +99,11 @@ export class TransportManager {
     console.log = (...args) => {
       this.logger.info("CONSOLE: " + args.join(" "));
     };
-
     console.error = (...args) => {
-      this.logger.error("CONSOLE_ERROR: " + args.join(" "));
+      this.logger.error("CONSOLE: " + args.join(" "));
+    };
+    console.warn = (...args) => {
+      this.logger.warn("CONSOLE: " + args.join(" "));
     };
   }
 
@@ -108,13 +111,26 @@ export class TransportManager {
    * Setup STDIO event handlers
    */
   private setupStdioEventHandlers(): void {
-    // Log when the stdin closes (which happens when the parent process terminates)
-    process.stdin.on("end", () => {
-      this.logger.info(
-        "STDIN stream ended - parent process may have terminated"
-      );
+    // Handle process termination gracefully
+    process.on("SIGINT", () => {
+      this.logger.info("Received SIGINT, shutting down STDIO transport...");
       process.exit(0);
     });
+
+    process.on("SIGTERM", () => {
+      this.logger.info("Received SIGTERM, shutting down STDIO transport...");
+      process.exit(0);
+    });
+  }
+
+  /**
+   * Setup HTTP transport (simpler alternative to SSE)
+   */
+  setupHttpTransport(app: express.Application): void {
+    this.logger.info("Setting up HTTP MCP transport (Railway-optimized)");
+    
+    const httpTransport = new HttpMcpTransport(this.logger, this.mcpServer);
+    httpTransport.setupHttpTransport(app);
   }
 
   /**
@@ -122,6 +138,13 @@ export class TransportManager {
    */
   setupSseTransport(app: express.Application): void {
     this.logger.info("Setting up SSE transport endpoints");
+
+    // For Railway, use HTTP transport instead of SSE
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production') {
+      this.logger.info("Railway environment detected, using HTTP transport instead of SSE");
+      this.setupHttpTransport(app);
+      return;
+    }
 
     // SSE endpoint for MCP connections
     app.get("/mcp", async (req: Request, res: Response) => {
@@ -160,119 +183,6 @@ export class TransportManager {
         res.status(500).end();
       }
     });
-
-    // POST endpoint for MCP connections (create connection if needed)
-    app.post(
-      "/mcp",
-      express.json(),
-      async (req: Request, res: Response) => {
-        this.logger.debug("Received MCP POST request:", req.body);
-
-        try {
-          // If no active connections, create a temporary one for this request
-          let transports = Array.from(this.sseTransports.values());
-
-          if (transports.length === 0) {
-            this.logger.info("No active SSE connections, creating temporary connection for MCP POST");
-            
-            // Create a temporary connection ID
-            const connectionId = `temp-${Date.now()}`;
-            
-            // Create a mock response object for the transport
-            const mockRes = {
-              setHeader: () => {},
-              write: (data: string) => {
-                this.logger.debug("SSE data would be sent:", data);
-              },
-              end: () => {},
-              on: () => {},
-            } as any;
-
-            try {
-              // Create a temporary transport
-              const tempTransport = new SSEServerTransport("/messages", mockRes);
-              this.sseTransports.set(connectionId, tempTransport);
-              
-              // Connect to MCP server
-              await this.mcpServer.connect(tempTransport);
-              this.logger.info(`Temporary SSE transport ${connectionId} connected`);
-              
-              // Update transports array
-              transports = [tempTransport];
-              
-              // Clean up after a delay
-              setTimeout(() => {
-                this.sseTransports.delete(connectionId);
-                this.logger.debug(`Cleaned up temporary transport ${connectionId}`);
-              }, 30000); // 30 seconds
-              
-            } catch (error) {
-              this.logger.error("Error creating temporary transport:", error);
-              return res.status(503).json({ error: "Unable to create MCP connection" });
-            }
-          }
-
-          let handled = false;
-          let lastError = null;
-
-          for (const transport of transports) {
-            try {
-              // Use any available method to process the request
-              const sseTransport = transport as any;
-
-              if (typeof sseTransport.handleRequest === "function") {
-                this.logger.debug("Using handleRequest method for MCP POST");
-                handled = await sseTransport.handleRequest(req, res);
-              } else if (typeof sseTransport.processRequest === "function") {
-                this.logger.debug("Using processRequest method for MCP POST");
-                handled = await sseTransport.processRequest(req, res);
-              } else {
-                // Fallback: try to handle the request directly
-                this.logger.debug("Attempting direct request handling");
-                res.json({ 
-                  jsonrpc: "2.0",
-                  result: {
-                    protocolVersion: "2024-11-05",
-                    capabilities: {
-                      prompts: { listChanged: true },
-                      tools: { listChanged: true }
-                    },
-                    serverInfo: {
-                      name: "claude-prompts-mcp",
-                      version: "1.0.0"
-                    }
-                  },
-                  id: req.body.id || null
-                });
-                handled = true;
-              }
-
-              if (handled) {
-                this.logger.debug("MCP POST request handled successfully");
-                break;
-              }
-            } catch (e) {
-              lastError = e;
-              this.logger.error("Error processing MCP POST request with transport:", e);
-            }
-          }
-
-          if (!handled) {
-            this.logger.error("No transport handled the MCP POST request");
-            if (lastError) {
-              this.logger.error("Last error:", lastError);
-            }
-            res.status(404).json({ error: "No matching transport found for MCP request" });
-          }
-        } catch (error) {
-          this.logger.error("Error handling MCP POST request:", error);
-          res.status(500).json({
-            error: "Internal server error",
-            details: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    );
 
     // Messages endpoint for SSE transport
     app.post(
@@ -363,12 +273,10 @@ export class TransportManager {
   }
 
   /**
-   * Close all active SSE connections
+   * Close all active connections
    */
   closeAllConnections(): void {
-    this.logger.info(
-      `Closing ${this.sseTransports.size} active SSE connections`
-    );
+    this.logger.info("Closing all transport connections");
     this.sseTransports.clear();
   }
 }
@@ -382,15 +290,5 @@ export function createTransportManager(
   mcpServer: any,
   transport: string
 ): TransportManager {
-  const transportManager = new TransportManager(
-    logger,
-    configManager,
-    mcpServer,
-    transport
-  );
-
-  // Validate transport configuration
-  transportManager.validateTransport();
-
-  return transportManager;
+  return new TransportManager(logger, configManager, mcpServer, transport);
 }
