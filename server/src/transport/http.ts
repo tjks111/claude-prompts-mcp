@@ -83,6 +83,19 @@ export class HttpMcpTransport {
    */
   private async handleMcpRequest(req: Request, res: Response): Promise<void> {
     try {
+      // Enhanced logging for OpenAI MCP debugging
+      console.error("🔍 MCP Request received:", {
+        method: req.method,
+        path: req.path,
+        userAgent: req.get('User-Agent'),
+        contentType: req.get('Content-Type'),
+        body: JSON.stringify(req.body, null, 2),
+        headers: {
+          authorization: req.get('Authorization') ? '[PRESENT]' : '[MISSING]',
+          'x-api-key': req.get('X-API-Key') ? '[PRESENT]' : '[MISSING]',
+        }
+      });
+
       this.logger.debug("Received MCP HTTP request:", {
         method: req.method,
         path: req.path,
@@ -134,7 +147,7 @@ export class HttpMcpTransport {
   private async handleInitialize(req: Request, res: Response): Promise<void> {
     this.logger.info("Handling MCP initialize request");
     
-    res.json({
+    const response = {
       jsonrpc: "2.0",
       result: {
         protocolVersion: "2024-11-05",
@@ -148,7 +161,10 @@ export class HttpMcpTransport {
         }
       },
       id: req.body.id || null
-    });
+    };
+
+    console.error("🔄 Sending MCP initialize response:", JSON.stringify(response, null, 2));
+    res.json(response);
   }
 
   /**
