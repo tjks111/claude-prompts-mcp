@@ -78,7 +78,7 @@ export class HttpMcpTransport {
       this.logger.info("GET request to /mcp endpoint from:", req.ip, "User-Agent:", req.get('User-Agent'));
       res.json({
         message: "Claude Prompts MCP Server - HTTP Transport",
-        version: "1.0.1", // Force Railway redeploy
+        version: "1.0.2", // Force Railway redeploy - CI disabled
         transport: "http",
         endpoints: {
           mcp: "POST /mcp - Send MCP requests",
