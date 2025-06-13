@@ -104,6 +104,20 @@ export class HttpMcpTransport {
       });
     });
 
+    // 🚨 CRITICAL FIX: OpenAI is hitting /mpc instead of /mcp (typo fix)
+    console.error("🚨 REGISTERING /mpc -> /mcp REDIRECT FOR OPENAI TYPO");
+    app.post("/mpc", (req: Request, res: Response) => {
+      console.error("🚨 OPENAI TYPO DETECTED: /mpc -> redirecting to /mcp");
+      this.logger.info("OpenAI hit /mpc endpoint - redirecting to /mcp");
+      
+      // Forward the request to the correct /mcp endpoint
+      req.url = '/mcp';
+      req.originalUrl = '/mcp';
+      
+      // Call the MCP handler directly
+      this.handleMcpRequest(req, res);
+    });
+
     // EMERGENCY: Simple POST test endpoint
     console.error("🚨 REGISTERING POST /test-post ENDPOINT");
     app.post("/test-post", (req: Request, res: Response) => {
@@ -124,6 +138,14 @@ export class HttpMcpTransport {
     app.post("/mcp", async (req: Request, res: Response) => {
       console.error("🔥 POST /mcp request received!");
       this.logger.info("🔥 POST /mcp request received!");
+      await this.handleMcpRequest(req, res);
+    });
+
+    // Handle OpenAI's /mpc endpoint (typo in OpenAI client?)
+    console.error("🚨 REGISTERING POST /mpc ENDPOINT (OpenAI compatibility)");
+    app.post("/mpc", async (req: Request, res: Response) => {
+      console.error("🔥 POST /mpc request received from OpenAI!");
+      this.logger.info("🔥 POST /mpc request received from OpenAI!");
       await this.handleMcpRequest(req, res);
     });
 
