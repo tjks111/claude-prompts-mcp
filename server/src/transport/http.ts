@@ -202,20 +202,21 @@ export class HttpMcpTransport {
       this.logger.info("SSE GET connection request from browser client");
       
       try {
-        // Set SSE headers
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Cache-Control, Authorization',
-          'Access-Control-Expose-Headers': 'Content-Type'
-        });
+        // Set SSE headers properly
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Cache-Control, Authorization');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Type');
+        
+        // Important: Set status code
+        res.status(200);
 
         // Send initial connection message
         res.write('data: {"type":"connection","status":"connected","timestamp":"' + new Date().toISOString() + '"}\n\n');
 
-        // Keep connection alive
+        // Keep connection alive with shorter intervals for better responsiveness
         const keepAlive = setInterval(() => {
           try {
             res.write('data: {"type":"ping","timestamp":"' + new Date().toISOString() + '"}\n\n');
@@ -223,7 +224,7 @@ export class HttpMcpTransport {
             clearInterval(keepAlive);
             this.logger.error("SSE ping failed:", error);
           }
-        }, 30000);
+        }, 15000); // Reduced from 30s to 15s
 
         // Handle client disconnect
         req.on('close', () => {
@@ -236,9 +237,17 @@ export class HttpMcpTransport {
           this.logger.error("SSE connection error:", error);
         });
 
+        // Handle response errors
+        res.on('error', (error) => {
+          clearInterval(keepAlive);
+          this.logger.error("SSE response error:", error);
+        });
+
       } catch (error) {
         this.logger.error("SSE setup error:", error);
-        res.status(500).json({ error: "SSE setup failed" });
+        if (!res.headersSent) {
+          res.status(500).json({ error: "SSE setup failed" });
+        }
       }
     });
 
@@ -282,6 +291,14 @@ export class HttpMcpTransport {
    * Handle MCP request directly via HTTP (optimized)
    */
   private async handleMcpRequest(req: Request, res: Response): Promise<void> {
+    // Add timeout protection
+    const timeoutMs = 30000; // 30 second timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Request timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
     try {
       // Minimal logging for performance
       if (process.env.NODE_ENV === 'development') {
@@ -292,49 +309,12 @@ export class HttpMcpTransport {
         });
       }
 
-      // Fast authentication check
-      const authResult = this.validateAuthentication(req);
-      if (!authResult.isValid) {
-        res.status(401).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32001,
-            message: `Unauthorized - ${authResult.error}`
-          },
-          id: req.body?.id || null
-        });
-        return;
-      }
+      // Race between actual processing and timeout
+      await Promise.race([
+        this.processMcpRequest(req, res),
+        timeoutPromise
+      ]);
 
-      const request = req.body;
-
-      // Fast method routing without excessive logging
-      switch (request.method) {
-        case "initialize":
-          await this.handleInitialize(req, res);
-          break;
-        case "prompts/list":
-          await this.handlePromptsList(req, res);
-          break;
-        case "prompts/get":
-          await this.handlePromptsGet(req, res);
-          break;
-        case "tools/list":
-          await this.handleToolsList(req, res);
-          break;
-        case "tools/call":
-          await this.handleToolsCall(req, res);
-          break;
-        default:
-          res.json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32601,
-              message: `Method not found: ${request.method}`
-            },
-            id: request.id || null
-          });
-      }
     } catch (error) {
       this.logger.error("Error handling MCP HTTP request:", error);
       if (!res.headersSent) {
@@ -342,14 +322,65 @@ export class HttpMcpTransport {
         const errorResponse = {
           jsonrpc: "2.0",
           error: {
-            code: -32603,
-            message: "Internal error",
+            code: error instanceof Error && error.message.includes('timeout') ? -32001 : -32603,
+            message: error instanceof Error && error.message.includes('timeout') 
+              ? "Request timeout" 
+              : "Internal error",
             data: error instanceof Error ? error.message : String(error)
           },
           id: req.body?.id || null
         };
         this.sendResponse(req, res, errorResponse);
       }
+    }
+  }
+
+  /**
+   * Process MCP request (separated for timeout handling)
+   */
+  private async processMcpRequest(req: Request, res: Response): Promise<void> {
+    // Fast authentication check
+    const authResult = this.validateAuthentication(req);
+    if (!authResult.isValid) {
+      res.status(401).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32001,
+          message: `Unauthorized - ${authResult.error}`
+        },
+        id: req.body?.id || null
+      });
+      return;
+    }
+
+    const request = req.body;
+
+    // Fast method routing without excessive logging
+    switch (request.method) {
+      case "initialize":
+        await this.handleInitialize(req, res);
+        break;
+      case "prompts/list":
+        await this.handlePromptsList(req, res);
+        break;
+      case "prompts/get":
+        await this.handlePromptsGet(req, res);
+        break;
+      case "tools/list":
+        await this.handleToolsList(req, res);
+        break;
+      case "tools/call":
+        await this.handleToolsCall(req, res);
+        break;
+      default:
+        res.json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32601,
+            message: `Method not found: ${request.method}`
+          },
+          id: request.id || null
+        });
     }
   }
 
