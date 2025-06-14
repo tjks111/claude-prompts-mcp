@@ -98,12 +98,12 @@ export class PromptRegistry {
 
       // Register the prompt based on the configuration mode
       if (registrationMode === "id" || registrationMode === "both") {
-        this.mcpServer.prompt(promptData.id, argsSchema, promptHandler);
+        this.mcpServer.prompt(promptData.id, promptData.description || `Prompt: ${promptData.name}`, argsSchema, promptHandler);
         this.logger.debug(`Registered prompt with ID: ${promptData.id}`);
       }
 
       if (registrationMode === "name" || registrationMode === "both") {
-        this.mcpServer.prompt(promptData.name, argsSchema, promptHandler);
+        this.mcpServer.prompt(promptData.name, promptData.description || `Prompt: ${promptData.name}`, argsSchema, promptHandler);
         this.logger.debug(`Registered prompt with name: ${promptData.name}`);
       }
 
