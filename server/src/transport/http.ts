@@ -300,18 +300,38 @@ export class HttpMcpTransport {
 
       const request = req.body;
 
+      // EMERGENCY DEBUG: Log the exact request being processed
+      console.error("🚨 PROCESSING MCP REQUEST:", {
+        method: request?.method,
+        id: request?.id,
+        hasParams: !!request?.params,
+        requestType: typeof request,
+        requestKeys: request ? Object.keys(request) : 'NO REQUEST'
+      });
+
       // Handle different MCP request types
       if (request.method === "initialize") {
+        console.error("🔄 CALLING handleInitialize");
         await this.handleInitialize(req, res);
+        console.error("✅ handleInitialize COMPLETED");
       } else if (request.method === "prompts/list") {
+        console.error("📋 CALLING handlePromptsList");
         await this.handlePromptsList(req, res);
+        console.error("✅ handlePromptsList COMPLETED");
       } else if (request.method === "prompts/get") {
+        console.error("📄 CALLING handlePromptsGet");
         await this.handlePromptsGet(req, res);
+        console.error("✅ handlePromptsGet COMPLETED");
       } else if (request.method === "tools/list") {
+        console.error("🔧 CALLING handleToolsList");
         await this.handleToolsList(req, res);
+        console.error("✅ handleToolsList COMPLETED");
       } else if (request.method === "tools/call") {
+        console.error("⚡ CALLING handleToolsCall");
         await this.handleToolsCall(req, res);
+        console.error("✅ handleToolsCall COMPLETED");
       } else {
+        console.error("❌ UNKNOWN METHOD:", request.method);
         // Default response for unknown methods
         res.json({
           jsonrpc: "2.0",
@@ -321,6 +341,7 @@ export class HttpMcpTransport {
           },
           id: request.id || null
         });
+        console.error("✅ ERROR RESPONSE SENT");
       }
     } catch (error) {
       this.logger.error("Error handling MCP HTTP request:", error);
@@ -340,35 +361,66 @@ export class HttpMcpTransport {
    * Handle initialize request
    */
   private async handleInitialize(req: Request, res: Response): Promise<void> {
+    console.error("🚨 INITIALIZE: Starting handleInitialize");
     this.logger.info("Handling MCP initialize request");
     
-    const clientProtocolVersion = req.body.params?.protocolVersion;
-    this.logger.info("🔄 Client protocol version:", clientProtocolVersion);
-    
-    // Support both 2024-11-05 and 2025-03-26 protocol versions
-    const supportedVersions = ["2024-11-05", "2025-03-26"];
-    const protocolVersion = supportedVersions.includes(clientProtocolVersion) 
-      ? clientProtocolVersion 
-      : "2025-03-26"; // Default to latest
-    
-    const response = {
-      jsonrpc: "2.0",
-      result: {
-        protocolVersion: protocolVersion,
-        capabilities: {
-          prompts: { listChanged: true },
-          tools: { listChanged: true }
+    try {
+      const clientProtocolVersion = req.body.params?.protocolVersion;
+      console.error("🚨 INITIALIZE: Client protocol version:", clientProtocolVersion);
+      this.logger.info("🔄 Client protocol version:", clientProtocolVersion);
+      
+      // Support both 2024-11-05 and 2025-03-26 protocol versions
+      const supportedVersions = ["2024-11-05", "2025-03-26"];
+      const protocolVersion = supportedVersions.includes(clientProtocolVersion) 
+        ? clientProtocolVersion 
+        : "2025-03-26"; // Default to latest
+      
+      console.error("🚨 INITIALIZE: Using protocol version:", protocolVersion);
+      
+      const response = {
+        jsonrpc: "2.0",
+        result: {
+          protocolVersion: protocolVersion,
+          capabilities: {
+            prompts: { listChanged: true },
+            tools: { listChanged: true }
+          },
+          serverInfo: {
+            name: "claude-prompts-mcp",
+            version: "1.0.0"
+          }
         },
-        serverInfo: {
-          name: "claude-prompts-mcp",
-          version: "1.0.0"
-        }
-      },
-      id: req.body.id || null
-    };
+        id: req.body.id || null
+      };
 
-    this.logger.info("🔄 Sending MCP initialize response:", JSON.stringify(response, null, 2));
-    res.json(response);
+      console.error("🚨 INITIALIZE: About to send response:", JSON.stringify(response, null, 2));
+      this.logger.info("🔄 Sending MCP initialize response:", JSON.stringify(response, null, 2));
+      
+      // Check if response has already been sent
+      if (res.headersSent) {
+        console.error("❌ INITIALIZE: Headers already sent! Cannot send response");
+        return;
+      }
+      
+      res.json(response);
+      console.error("✅ INITIALIZE: Response sent successfully");
+      
+    } catch (error) {
+      console.error("❌ INITIALIZE: Error in handleInitialize:", error);
+      this.logger.error("Error in handleInitialize:", error);
+      
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal error in initialize",
+            data: error instanceof Error ? error.message : String(error)
+          },
+          id: req.body?.id || null
+        });
+      }
+    }
   }
 
   /**
