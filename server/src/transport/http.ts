@@ -402,8 +402,30 @@ export class HttpMcpTransport {
         return;
       }
       
-      res.json(response);
-      console.error("✅ INITIALIZE: Response sent successfully");
+      // Check if client expects SSE format (OpenAI sends Accept: text/event-stream)
+      const acceptHeader = req.get('Accept');
+      console.error("🚨 INITIALIZE: Client Accept header:", acceptHeader);
+      
+      if (acceptHeader && acceptHeader.includes('text/event-stream')) {
+        console.error("🚨 INITIALIZE: Sending SSE format response");
+        // Send as Server-Sent Events format
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Cache-Control'
+        });
+        
+        // Send the response as SSE data
+        res.write(`data: ${JSON.stringify(response)}\n\n`);
+        res.end();
+        console.error("✅ INITIALIZE: SSE response sent successfully");
+      } else {
+        console.error("🚨 INITIALIZE: Sending JSON format response");
+        res.json(response);
+        console.error("✅ INITIALIZE: JSON response sent successfully");
+      }
       
     } catch (error) {
       console.error("❌ INITIALIZE: Error in handleInitialize:", error);
