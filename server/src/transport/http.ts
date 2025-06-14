@@ -197,32 +197,83 @@ export class HttpMcpTransport {
       await this.handleMcpRequest(req, res);
     });
 
-    // Add SSE endpoint for browser clients
+    // Add SSE endpoint for browser clients (GET)
     app.get("/sse", (req: Request, res: Response) => {
-      this.logger.info("SSE connection request from browser client");
+      this.logger.info("SSE GET connection request from browser client");
       
-      // Set SSE headers
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control',
-        'Access-Control-Expose-Headers': 'Content-Type'
-      });
+      try {
+        // Set SSE headers
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Cache-Control, Authorization',
+          'Access-Control-Expose-Headers': 'Content-Type'
+        });
 
-      // Send initial connection message
-      res.write('data: {"type":"connection","status":"connected"}\n\n');
+        // Send initial connection message
+        res.write('data: {"type":"connection","status":"connected","timestamp":"' + new Date().toISOString() + '"}\n\n');
 
-      // Keep connection alive
-      const keepAlive = setInterval(() => {
-        res.write('data: {"type":"ping"}\n\n');
-      }, 30000);
+        // Keep connection alive
+        const keepAlive = setInterval(() => {
+          try {
+            res.write('data: {"type":"ping","timestamp":"' + new Date().toISOString() + '"}\n\n');
+          } catch (error) {
+            clearInterval(keepAlive);
+            this.logger.error("SSE ping failed:", error);
+          }
+        }, 30000);
 
-      // Handle client disconnect
-      req.on('close', () => {
-        clearInterval(keepAlive);
-        this.logger.info("SSE client disconnected");
+        // Handle client disconnect
+        req.on('close', () => {
+          clearInterval(keepAlive);
+          this.logger.info("SSE client disconnected");
+        });
+
+        req.on('error', (error) => {
+          clearInterval(keepAlive);
+          this.logger.error("SSE connection error:", error);
+        });
+
+      } catch (error) {
+        this.logger.error("SSE setup error:", error);
+        res.status(500).json({ error: "SSE setup failed" });
+      }
+    });
+
+    // Handle SSE POST requests (some clients might try this)
+    app.post("/sse", async (req: Request, res: Response) => {
+      this.logger.info("SSE POST request - redirecting to MCP handler");
+      
+      // If client POSTs to /sse, treat it as an MCP request
+      await this.handleMcpRequest(req, res);
+    });
+
+    // Handle SSE OPTIONS for CORS
+    app.options("/sse", (req: Request, res: Response) => {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control');
+      res.status(200).end();
+    });
+
+    // Debug endpoint to check routing
+    app.get("/debug/routes", (req: Request, res: Response) => {
+      res.json({
+        message: "MCP Server Route Debug",
+        availableRoutes: [
+          "GET /mcp - Server info",
+          "POST /mcp - MCP requests", 
+          "GET /sse - Server-Sent Events",
+          "POST /sse - MCP via SSE endpoint",
+          "OPTIONS /sse - CORS preflight",
+          "GET /health - Health check",
+          "GET /prompts - List prompts",
+          "GET /debug/routes - This debug info"
+        ],
+        timestamp: new Date().toISOString(),
+        version: "1.0.4"
       });
     });
   }
