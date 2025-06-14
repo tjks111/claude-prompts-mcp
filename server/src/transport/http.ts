@@ -25,7 +25,7 @@ export class HttpMcpTransport {
   }
 
   /**
-   * Validate authentication for MCP requests
+   * Validate authentication for MCP requests (browser-friendly)
    */
   private validateAuthentication(req: Request): { isValid: boolean; error?: string } {
     const authRequired = process.env.MCP_REQUIRE_AUTH === 'true';
@@ -36,7 +36,15 @@ export class HttpMcpTransport {
 
     // Check for Bearer token (OAuth or API key)
     const authHeader = req.get('Authorization');
+    
+    // For browser clients, be more lenient with missing auth on GET requests
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      // Allow GET requests without auth for browser compatibility
+      if (req.method === 'GET') {
+        this.logger.info("🌐 Browser GET request - allowing without auth");
+        return { isValid: true };
+      }
+      
       return { 
         isValid: false, 
         error: "Missing Authorization header with Bearer token" 
@@ -73,16 +81,18 @@ export class HttpMcpTransport {
   setupHttpTransport(app: express.Application): void {
     this.logger.info("Setting up HTTP MCP transport endpoints with OAuth 2.1 support");
 
-    // Add CORS middleware (optimized)
+    // Add CORS middleware (optimized for browser MCP clients)
     app.use((req: Request, res: Response, next) => {
-      // Enable CORS for all origins
+      // Enable CORS for all origins with comprehensive headers
       res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key, Cache-Control, Pragma');
+      res.header('Access-Control-Expose-Headers', 'Content-Type, Cache-Control, Pragma');
+      res.header('Access-Control-Max-Age', '86400'); // 24 hours
       
       // Handle preflight requests quickly
       if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
+        res.status(200).end();
         return;
       }
       
@@ -118,16 +128,28 @@ export class HttpMcpTransport {
       
       res.json({
         message: "Claude Prompts MCP Server - HTTP Transport",
-        version: "1.0.3", // Updated version for auth fix
+        version: "1.0.4", // Updated version for browser compatibility
         transport: "http",
         authenticated: process.env.MCP_REQUIRE_AUTH === 'true',
+        browserCompatible: true,
         endpoints: {
           mcp: "POST /mcp - Send MCP requests",
           messages: "POST /messages - Send MCP messages",
+          sse: "GET /sse - Server-Sent Events for browser clients",
           health: "GET /health - Health check",
           prompts: "GET /prompts - List all prompts"
         },
+        cors: {
+          enabled: true,
+          allowOrigin: "*",
+          allowMethods: "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+          allowHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key, Cache-Control, Pragma"
+        },
         usage: "Send MCP requests as JSON-RPC 2.0 messages to POST /mcp",
+        browserUsage: {
+          http: "https://claude-prompts-mcp-production-0a79.up.railway.app/mcp",
+          sse: "https://claude-prompts-mcp-production-0a79.up.railway.app/sse"
+        },
         example: {
           method: "POST",
           url: "/mcp",
@@ -137,7 +159,7 @@ export class HttpMcpTransport {
             params: {
               protocolVersion: "2025-03-26",
               capabilities: {},
-              clientInfo: { name: "test-client", version: "1.0.0" }
+              clientInfo: { name: "browser-client", version: "1.0.0" }
             },
             id: 1
           }
@@ -173,6 +195,35 @@ export class HttpMcpTransport {
     // Handle root POST requests
     app.post("/", async (req: Request, res: Response) => {
       await this.handleMcpRequest(req, res);
+    });
+
+    // Add SSE endpoint for browser clients
+    app.get("/sse", (req: Request, res: Response) => {
+      this.logger.info("SSE connection request from browser client");
+      
+      // Set SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control',
+        'Access-Control-Expose-Headers': 'Content-Type'
+      });
+
+      // Send initial connection message
+      res.write('data: {"type":"connection","status":"connected"}\n\n');
+
+      // Keep connection alive
+      const keepAlive = setInterval(() => {
+        res.write('data: {"type":"ping"}\n\n');
+      }, 30000);
+
+      // Handle client disconnect
+      req.on('close', () => {
+        clearInterval(keepAlive);
+        this.logger.info("SSE client disconnected");
+      });
     });
   }
 
