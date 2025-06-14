@@ -1,2 +1,3 @@
-Force Railway deployment - timestamp: 2025-06-13T12:52:00Z
+Force Railway deployment - timestamp: 2025-06-14T01:15:00Z
 This file forces Railway to detect changes and redeploy.
+Performance optimization update - fixing OpenAI timeout issues.

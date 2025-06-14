@@ -97,12 +97,12 @@ async function rollbackStartup(error: Error): Promise<void> {
 }
 
 /**
- * Setup periodic health checks
+ * Setup periodic health checks (optimized)
  */
 function setupHealthMonitoring(): void {
   if (!logger) return;
 
-  // Health check every 30 seconds
+  // Reduced frequency: Health check every 2 minutes for better performance
   setInterval(async () => {
     if (isShuttingDown || !logger) return;
 
@@ -110,19 +110,9 @@ function setupHealthMonitoring(): void {
       const isHealthy = await validateApplicationHealth();
       if (!isHealthy) {
         logger.warn("Health check failed - application may be degraded");
-
-        // Log current status for debugging
-        if (orchestrator) {
-          const diagnostics = orchestrator.getDiagnosticInfo();
-          logger.warn("Diagnostic information:", {
-            health: diagnostics.health,
-            performance: diagnostics.performance,
-            errors: diagnostics.errors,
-          });
-        }
       } else {
-        // Periodic performance logging (every 5th health check = 2.5 minutes)
-        if (Date.now() % (5 * 30000) < 30000) {
+        // Reduced performance logging frequency (every 10 minutes)
+        if (Date.now() % (10 * 60000) < 120000) {
           const performance = orchestrator.getPerformanceMetrics();
           logger.info("Performance metrics:", {
             uptime: `${Math.floor(performance.uptime / 60)} minutes`,
@@ -136,19 +126,11 @@ function setupHealthMonitoring(): void {
       }
     } catch (error) {
       logger.error("Error during health check:", error);
-
-      // Emergency diagnostic collection
-      try {
-        const emergency = getDetailedDiagnostics();
-        logger.error("Emergency diagnostics:", emergency);
-      } catch (diagError) {
-        logger.error("Failed to collect emergency diagnostics:", diagError);
-      }
     }
-  }, 30000);
+  }, 120000); // 2 minutes instead of 30 seconds
 
   logger.info(
-    "Health monitoring enabled (30-second intervals with performance tracking)"
+    "Health monitoring enabled (2-minute intervals for optimal performance)"
   );
 }
 
