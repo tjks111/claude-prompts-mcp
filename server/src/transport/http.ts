@@ -345,15 +345,19 @@ export class HttpMcpTransport {
       }
     } catch (error) {
       this.logger.error("Error handling MCP HTTP request:", error);
-      res.status(500).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32603,
-          message: "Internal error",
-          data: error instanceof Error ? error.message : String(error)
-        },
-        id: req.body?.id || null
-      });
+      if (!res.headersSent) {
+        res.status(500);
+        const errorResponse = {
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal error",
+            data: error instanceof Error ? error.message : String(error)
+          },
+          id: req.body?.id || null
+        };
+        this.sendResponse(req, res, errorResponse);
+      }
     }
   }
 
@@ -432,7 +436,7 @@ export class HttpMcpTransport {
       this.logger.error("Error in handleInitialize:", error);
       
       if (!res.headersSent) {
-        res.status(500).json({
+        const errorResponse = {
           jsonrpc: "2.0",
           error: {
             code: -32603,
@@ -440,8 +444,43 @@ export class HttpMcpTransport {
             data: error instanceof Error ? error.message : String(error)
           },
           id: req.body?.id || null
-        });
+        };
+        this.sendResponse(req, res, errorResponse);
       }
+    }
+  }
+
+  /**
+   * Send response in appropriate format (JSON or SSE)
+   */
+  private sendResponse(req: Request, res: Response, response: any): void {
+    if (res.headersSent) {
+      console.error("❌ Headers already sent! Cannot send response");
+      return;
+    }
+
+    // Check if client expects SSE format (OpenAI sends Accept: text/event-stream)
+    const acceptHeader = req.get('Accept');
+    
+    if (acceptHeader && acceptHeader.includes('text/event-stream')) {
+      console.error("🚨 Sending SSE format response");
+      // Send as Server-Sent Events format
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+      });
+      
+      // Send the response as SSE data
+      res.write(`data: ${JSON.stringify(response)}\n\n`);
+      res.end();
+      console.error("✅ SSE response sent successfully");
+    } else {
+      console.error("🚨 Sending JSON format response");
+      res.json(response);
+      console.error("✅ JSON response sent successfully");
     }
   }
 
@@ -455,22 +494,25 @@ export class HttpMcpTransport {
       // Get prompts from the MCP server
       const prompts = await this.getPromptsFromServer();
       
-      res.json({
+      const response = {
         jsonrpc: "2.0",
         result: {
           prompts: prompts
         },
         id: req.body.id || null
-      });
+      };
+
+      this.sendResponse(req, res, response);
     } catch (error) {
       this.logger.error("Error getting prompts list:", error);
-      res.json({
+      const errorResponse = {
         jsonrpc: "2.0",
         result: {
           prompts: []
         },
         id: req.body.id || null
-      });
+      };
+      this.sendResponse(req, res, errorResponse);
     }
   }
 
@@ -486,21 +528,24 @@ export class HttpMcpTransport {
       // Get specific prompt from the MCP server
       const prompt = await this.getPromptFromServer(name, args);
       
-      res.json({
+      const response = {
         jsonrpc: "2.0",
         result: prompt,
         id: req.body.id || null
-      });
+      };
+
+      this.sendResponse(req, res, response);
     } catch (error) {
       this.logger.error("Error getting prompt:", error);
-      res.json({
+      const errorResponse = {
         jsonrpc: "2.0",
         error: {
           code: -32602,
           message: `Prompt not found: ${name}`
         },
         id: req.body.id || null
-      });
+      };
+      this.sendResponse(req, res, errorResponse);
     }
   }
 
@@ -514,22 +559,25 @@ export class HttpMcpTransport {
       // Get tools from the MCP server
       const tools = await this.getToolsFromServer();
       
-      res.json({
+      const response = {
         jsonrpc: "2.0",
         result: {
           tools: tools
         },
         id: req.body.id || null
-      });
+      };
+
+      this.sendResponse(req, res, response);
     } catch (error) {
       this.logger.error("Error getting tools list:", error);
-      res.json({
+      const errorResponse = {
         jsonrpc: "2.0",
         result: {
           tools: []
         },
         id: req.body.id || null
-      });
+      };
+      this.sendResponse(req, res, errorResponse);
     }
   }
 
@@ -545,21 +593,24 @@ export class HttpMcpTransport {
       // Call tool on the MCP server
       const result = await this.callToolOnServer(name, args);
       
-      res.json({
+      const response = {
         jsonrpc: "2.0",
         result: result,
         id: req.body.id || null
-      });
+      };
+
+      this.sendResponse(req, res, response);
     } catch (error) {
       this.logger.error("Error calling tool:", error);
-      res.json({
+      const errorResponse = {
         jsonrpc: "2.0",
         error: {
           code: -32602,
           message: `Tool call failed: ${name}`
         },
         id: req.body.id || null
-      });
+      };
+      this.sendResponse(req, res, errorResponse);
     }
   }
 
