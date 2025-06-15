@@ -9,6 +9,7 @@ import express, { Request, Response } from "express";
 import { ConfigManager } from "../config/index.js";
 import { Logger } from "../logging/index.js";
 import { HttpMcpTransport } from "./http.js";
+import { StreamableHttpTransport } from "./streamable-http.js";
 
 /**
  * Transport types supported by the server
@@ -17,6 +18,7 @@ export enum TransportType {
   STDIO = "stdio",
   SSE = "sse",
   HTTP = "http",
+  STREAMABLE_HTTP = "streamable-http",
 }
 
 /**
@@ -29,6 +31,7 @@ export class TransportManager {
   private transport: string;
   private sseTransports: Map<string, SSEServerTransport> = new Map();
   private httpTransport?: HttpMcpTransport;
+  private streamableHttpTransport?: StreamableHttpTransport;
 
   constructor(
     logger: Logger,
@@ -59,10 +62,10 @@ export class TransportManager {
       return transport;
     }
     
-    // For Railway deployment, default to HTTP transport
+    // For Railway deployment, default to Streamable HTTP transport (latest MCP 2025-03-26)
     if (process.env.RAILWAY_ENVIRONMENT || process.env.PORT) {
-      console.error(`🚀 Railway environment detected, using HTTP transport (RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}, PORT: ${process.env.PORT})`);
-      return TransportType.HTTP;
+      console.error(`🚀 Railway environment detected, using Streamable HTTP transport (RAILWAY_ENVIRONMENT: ${process.env.RAILWAY_ENVIRONMENT}, PORT: ${process.env.PORT})`);
+      return TransportType.STREAMABLE_HTTP;
     }
     
     const defaultTransport = configManager.getConfig().transports.default;
@@ -282,6 +285,13 @@ export class TransportManager {
   }
 
   /**
+   * Check if transport is Streamable HTTP
+   */
+  isStreamableHttp(): boolean {
+    return this.transport === TransportType.STREAMABLE_HTTP;
+  }
+
+  /**
    * Setup HTTP transport with Express integration
    */
   setupHttpTransport(app: express.Application): void {
@@ -294,6 +304,22 @@ export class TransportManager {
     this.httpTransport.setupHttpTransport(app);
 
     this.logger.info("HTTP MCP transport endpoints configured successfully");
+  }
+
+  /**
+   * Setup Streamable HTTP transport (MCP 2025-03-26)
+   */
+  async setupStreamableHttpTransport(): Promise<void> {
+    this.logger.info("Setting up Streamable HTTP MCP transport (2025-03-26)");
+
+    // Create Streamable HTTP transport instance
+    this.streamableHttpTransport = new StreamableHttpTransport(this.mcpServer, this.logger);
+
+    // Start the transport server
+    const port = parseInt(process.env.PORT || '3456', 10);
+    await this.streamableHttpTransport.start(port);
+
+    this.logger.info("Streamable HTTP MCP transport configured successfully");
   }
 
   /**

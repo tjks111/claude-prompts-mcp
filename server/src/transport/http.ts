@@ -169,7 +169,7 @@ export class HttpMcpTransport {
             params: {
               protocolVersion: "2025-03-26",
               capabilities: {},
-              clientInfo: { name: "browser-client", version: "1.0.6" }
+              clientInfo: { name: "browser-client", version: "1.0.7" }
             },
             id: 1
           }
@@ -235,7 +235,7 @@ export class HttpMcpTransport {
         transports: ["http", "sse"],
         serverInfo: {
           name: "claude-prompts-mcp",
-          version: "1.0.6"
+          version: "1.0.7"
         }
       });
     });
@@ -305,7 +305,7 @@ export class HttpMcpTransport {
             },
             serverInfo: {
               name: "claude-prompts-mcp",
-              version: "1.0.6"
+              version: "1.0.7"
             }
           },
           id: null
@@ -541,7 +541,7 @@ export class HttpMcpTransport {
           },
           serverInfo: {
             name: "claude-prompts-mcp",
-            version: "1.0.6"
+            version: "1.0.7"
           }
         },
         id: req.body.id || null

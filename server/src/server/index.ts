@@ -51,6 +51,8 @@ export class ServerManager {
         await this.startSseServer();
       } else if (this.transportManager.isHttp()) {
         await this.startHttpServer();
+      } else if (this.transportManager.isStreamableHttp()) {
+        await this.startStreamableHttpServer();
       } else {
         throw new Error(
           `Unsupported transport type: ${this.transportManager.getTransportType()}`
@@ -167,6 +169,24 @@ export class ServerManager {
         reject(error);
       });
     });
+  }
+
+  /**
+   * Start server with Streamable HTTP transport (MCP 2025-03-26)
+   */
+  private async startStreamableHttpServer(): Promise<void> {
+    console.error(`🚀 Starting Streamable HTTP server on port ${this.port} (MCP 2025-03-26)`);
+
+    // Setup Streamable HTTP transport - it creates its own Express server
+    await this.transportManager.setupStreamableHttpTransport();
+
+    console.error(`✅ Streamable HTTP server started successfully on port ${this.port}`);
+    this.logger.info(
+      `MCP Prompts Server running on http://0.0.0.0:${this.port} (Streamable HTTP transport)`
+    );
+    this.logger.info(
+      `Connect to http://0.0.0.0:${this.port}/mcp for MCP connections`
+    );
   }
 
   /**

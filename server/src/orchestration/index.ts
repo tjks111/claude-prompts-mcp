@@ -685,7 +685,7 @@ ${attemptedPaths}
     );
     console.error("✅ Transport manager created");
 
-    // Create API manager for SSE and HTTP transport
+    // Create API manager for SSE and HTTP transport (not needed for Streamable HTTP)
     if (this.transportManager.isSse() || this.transportManager.isHttp()) {
       console.error("🔧 Creating API manager...");
       this.apiManager = createApiManager(

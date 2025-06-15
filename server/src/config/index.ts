@@ -13,7 +13,7 @@ import { Config } from "../types/index.js";
 const DEFAULT_CONFIG: Config = {
   server: {
     name: "Claude Custom Prompts",
-    version: "1.0.6",
+    version: "1.0.7",
     port: 3456,
   },
   prompts: {

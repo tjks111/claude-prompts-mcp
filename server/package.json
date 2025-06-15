@@ -1,6 +1,6 @@
 {
   "name": "claude-prompts-server",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Claude Custom Prompts MCP Server",
   "author": "minipuft",
   "license": "MIT",
@@ -54,9 +54,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
     "@types/nunjucks": "^3.2.6",
+    "@types/uuid": "^10.0.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "nunjucks": "^3.2.4",
+    "uuid": "^11.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
