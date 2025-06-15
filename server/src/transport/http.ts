@@ -194,7 +194,16 @@ export class HttpMcpTransport {
         this.logger.info("MCP request to root endpoint");
         await this.handleMcpRequest(req, res);
       } else {
-        res.redirect("/mcp");
+        // Return JSON response instead of redirect for API compatibility
+        res.json({
+          error: "Invalid request",
+          message: "Expected JSON-RPC 2.0 request",
+          endpoints: {
+            mcp: "/mcp",
+            sse: "/sse",
+            health: "/health"
+          }
+        });
       }
     });
 

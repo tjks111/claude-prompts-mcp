@@ -13,7 +13,7 @@ console.log('🧪 Testing Cloudflare AI Playground Connection Fixes\n');
 
 // Test 1: HTTP Transport (POST /mcp)
 async function testHttpTransport() {
-  console.log('1️⃣ Testing HTTP Transport...');
+  console.log('1️⃣ Testing HTTP Transport (/mcp)...');
   
   const data = JSON.stringify({
     jsonrpc: "2.0",
@@ -234,13 +234,95 @@ async function testServerInfo() {
   });
 }
 
+// Test 5: Alternative endpoints
+async function testAlternativeEndpoints() {
+  console.log('5️⃣ Testing Alternative Endpoints...');
+  
+  const endpoints = [
+    { name: 'Root', path: '/' },
+    { name: 'RPC', path: '/rpc' }
+  ];
+  
+  const results = [];
+  
+  for (const endpoint of endpoints) {
+    const data = JSON.stringify({
+      jsonrpc: "2.0",
+      method: "tools/list",
+      id: 1
+    });
+
+    const options = {
+      hostname: 'claude-prompts-mcp-production-0a79.up.railway.app',
+      port: 443,
+      path: endpoint.path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length,
+        'Accept': 'application/json'
+      }
+    };
+
+    const result = await new Promise((resolve) => {
+      const startTime = Date.now();
+      const req = https.request(options, (res) => {
+        let responseData = '';
+        
+        res.on('data', (chunk) => {
+          responseData += chunk;
+        });
+        
+        res.on('end', () => {
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+          
+          try {
+            const parsed = JSON.parse(responseData);
+            if (parsed.result && parsed.result.tools && Array.isArray(parsed.result.tools)) {
+              console.log(`   ✅ ${endpoint.name} (${endpoint.path}): ${duration}ms (${parsed.result.tools.length} tools)`);
+              resolve({ success: true, duration, toolCount: parsed.result.tools.length });
+            } else {
+              console.log(`   ❌ ${endpoint.name} (${endpoint.path}): Invalid response format`);
+              resolve({ success: false, error: 'Invalid response format' });
+            }
+          } catch (error) {
+            console.log(`   ❌ ${endpoint.name} (${endpoint.path}): JSON parse error - ${error.message}`);
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        console.log(`   ❌ ${endpoint.name} (${endpoint.path}): Request error - ${error.message}`);
+        resolve({ success: false, error: error.message });
+      });
+
+      req.setTimeout(10000, () => {
+        console.log(`   ❌ ${endpoint.name} (${endpoint.path}): Timeout`);
+        req.destroy();
+        resolve({ success: false, error: 'Timeout' });
+      });
+
+      req.write(data);
+      req.end();
+    });
+    
+    results.push(result);
+  }
+  
+  const allSuccess = results.every(r => r.success);
+  return { success: allSuccess, results };
+}
+
 // Run all tests
 async function runTests() {
   const results = {
     http: await testHttpTransport(),
     sse: await testSSETransport(),
     cors: await testCORSHeaders(),
-    info: await testServerInfo()
+    info: await testServerInfo(),
+    alternatives: await testAlternativeEndpoints()
   };
 
   console.log('\n📊 Test Results Summary:');
