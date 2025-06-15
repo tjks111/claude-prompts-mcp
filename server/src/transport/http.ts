@@ -197,9 +197,9 @@ export class HttpMcpTransport {
       await this.handleMcpRequest(req, res);
     });
 
-    // Add SSE endpoint for browser clients (GET)
+    // Add SSE endpoint for MCP-over-SSE transport
     app.get("/sse", (req: Request, res: Response) => {
-      this.logger.info("SSE GET connection request from browser client");
+      this.logger.info("SSE MCP transport connection request");
       
       try {
         // Set SSE headers properly
@@ -207,46 +207,77 @@ export class HttpMcpTransport {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', 'Cache-Control, Authorization');
+        res.setHeader('Access-Control-Allow-Headers', 'Cache-Control, Authorization, Content-Type');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Type');
         
         // Important: Set status code
         res.status(200);
 
-        // Send initial connection message
-        res.write('data: {"type":"connection","status":"connected","timestamp":"' + new Date().toISOString() + '"}\n\n');
+        // Send MCP initialization response immediately for SSE transport
+        const initResponse = {
+          jsonrpc: "2.0",
+          result: {
+            protocolVersion: "2025-03-26",
+            capabilities: {
+              prompts: {
+                listChanged: true
+              },
+              tools: {
+                listChanged: true
+              }
+            },
+            serverInfo: {
+              name: "claude-prompts-mcp",
+              version: "1.0.0"
+            }
+          },
+          id: null
+        };
 
-        // Keep connection alive with shorter intervals for better responsiveness
+        // Send initialization as SSE data
+        res.write(`data: ${JSON.stringify(initResponse)}\n\n`);
+
+        // Store connection for potential future use
+        const connectionId = Date.now().toString();
+        this.logger.info(`SSE MCP connection established: ${connectionId}`);
+
+        // Keep connection alive with MCP-style pings
         const keepAlive = setInterval(() => {
           try {
-            res.write('data: {"type":"ping","timestamp":"' + new Date().toISOString() + '"}\n\n');
+            // Send a simple ping in MCP format
+            const ping = {
+              jsonrpc: "2.0",
+              method: "notifications/ping",
+              params: { timestamp: new Date().toISOString() }
+            };
+            res.write(`data: ${JSON.stringify(ping)}\n\n`);
           } catch (error) {
             clearInterval(keepAlive);
-            this.logger.error("SSE ping failed:", error);
+            this.logger.error("SSE MCP ping failed:", error);
           }
-        }, 15000); // Reduced from 30s to 15s
+        }, 30000); // 30 second intervals for MCP pings
 
         // Handle client disconnect
         req.on('close', () => {
           clearInterval(keepAlive);
-          this.logger.info("SSE client disconnected");
+          this.logger.info(`SSE MCP client disconnected: ${connectionId}`);
         });
 
         req.on('error', (error) => {
           clearInterval(keepAlive);
-          this.logger.error("SSE connection error:", error);
+          this.logger.error("SSE MCP connection error:", error);
         });
 
         // Handle response errors
         res.on('error', (error) => {
           clearInterval(keepAlive);
-          this.logger.error("SSE response error:", error);
+          this.logger.error("SSE MCP response error:", error);
         });
 
       } catch (error) {
-        this.logger.error("SSE setup error:", error);
+        this.logger.error("SSE MCP setup error:", error);
         if (!res.headersSent) {
-          res.status(500).json({ error: "SSE setup failed" });
+          res.status(500).json({ error: "SSE MCP setup failed" });
         }
       }
     });
