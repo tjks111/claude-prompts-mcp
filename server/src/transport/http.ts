@@ -169,7 +169,7 @@ export class HttpMcpTransport {
             params: {
               protocolVersion: "2025-03-26",
               capabilities: {},
-              clientInfo: { name: "browser-client", version: "1.0.5" }
+              clientInfo: { name: "browser-client", version: "1.0.6" }
             },
             id: 1
           }
@@ -211,6 +211,39 @@ export class HttpMcpTransport {
       await this.handleMcpRequest(req, res);
     });
 
+    // Handle OPTIONS for /routes endpoint (CORS preflight)
+    app.options("/routes", (req: Request, res: Response) => {
+      this.logger.info("OPTIONS request to /routes endpoint");
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Cache-Control, Authorization, Content-Type');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      res.status(200).end();
+    });
+
+    // Handle /routes endpoint for MCP client discovery
+    app.get("/routes", (req: Request, res: Response) => {
+      this.logger.info("GET request to /routes endpoint for MCP client discovery");
+      res.json({
+        routes: {
+          mcp: "/mcp",
+          rpc: "/rpc", 
+          sse: "/sse",
+          health: "/health",
+          messages: "/messages"
+        },
+        transports: ["http", "sse"],
+        serverInfo: {
+          name: "claude-prompts-mcp",
+          version: "1.0.6"
+        }
+      });
+    });
+
+    app.post("/routes", async (req: Request, res: Response) => {
+      await this.handleMcpRequest(req, res);
+    });
+
     // Handle GET requests to /messages endpoint (for info)
     app.get("/messages", (req: Request, res: Response) => {
       this.logger.info("GET request to /messages endpoint");
@@ -229,6 +262,16 @@ export class HttpMcpTransport {
     // Handle root POST requests
     app.post("/", async (req: Request, res: Response) => {
       await this.handleMcpRequest(req, res);
+    });
+
+    // Handle OPTIONS for SSE endpoint (CORS preflight)
+    app.options("/sse", (req: Request, res: Response) => {
+      this.logger.info("OPTIONS request to /sse endpoint");
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Cache-Control, Authorization, Content-Type');
+      res.setHeader('Access-Control-Max-Age', '86400');
+      res.status(200).end();
     });
 
     // Add SSE endpoint for MCP-over-SSE transport
@@ -262,7 +305,7 @@ export class HttpMcpTransport {
             },
             serverInfo: {
               name: "claude-prompts-mcp",
-              version: "1.0.5"
+              version: "1.0.6"
             }
           },
           id: null
@@ -498,7 +541,7 @@ export class HttpMcpTransport {
           },
           serverInfo: {
             name: "claude-prompts-mcp",
-            version: "1.0.5"
+            version: "1.0.6"
           }
         },
         id: req.body.id || null

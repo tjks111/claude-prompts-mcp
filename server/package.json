@@ -1,6 +1,6 @@
 {
   "name": "claude-prompts-server",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Claude Custom Prompts MCP Server",
   "author": "minipuft",
   "license": "MIT",
