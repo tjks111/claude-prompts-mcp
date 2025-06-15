@@ -37,11 +37,21 @@ export class HttpMcpTransport {
     // Check for Bearer token (OAuth or API key)
     const authHeader = req.get('Authorization');
     
-    // For browser clients, be more lenient with missing auth on GET requests
+    // For browser clients, be more lenient with missing auth
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       // Allow GET requests without auth for browser compatibility
       if (req.method === 'GET') {
         this.logger.info("🌐 Browser GET request - allowing without auth");
+        return { isValid: true };
+      }
+      
+      // Also allow POST requests from browser origins without auth for MCP compatibility
+      const origin = req.get('Origin');
+      const userAgent = req.get('User-Agent') || '';
+      const isBrowserRequest = origin || userAgent.includes('Mozilla') || userAgent.includes('Chrome') || userAgent.includes('Safari');
+      
+      if (isBrowserRequest) {
+        this.logger.info("🌐 Browser POST request - allowing without auth for MCP compatibility");
         return { isValid: true };
       }
       
@@ -177,6 +187,21 @@ export class HttpMcpTransport {
       await this.handleMcpRequest(req, res);
     });
 
+    // Handle alternative MCP endpoints that some clients might use
+    app.post("/", async (req: Request, res: Response) => {
+      // Only handle JSON-RPC requests to root
+      if (req.body && req.body.jsonrpc === "2.0") {
+        this.logger.info("MCP request to root endpoint");
+        await this.handleMcpRequest(req, res);
+      } else {
+        res.redirect("/mcp");
+      }
+    });
+
+    app.post("/rpc", async (req: Request, res: Response) => {
+      await this.handleMcpRequest(req, res);
+    });
+
     // Handle GET requests to /messages endpoint (for info)
     app.get("/messages", (req: Request, res: Response) => {
       this.logger.info("GET request to /messages endpoint");
@@ -282,12 +307,38 @@ export class HttpMcpTransport {
       }
     });
 
-    // Handle SSE POST requests (some clients might try this)
+    // Handle SSE POST requests for MCP-over-SSE hybrid approach
     app.post("/sse", async (req: Request, res: Response) => {
-      this.logger.info("SSE POST request - redirecting to MCP handler");
+      this.logger.info("SSE POST request - handling as MCP request");
       
-      // If client POSTs to /sse, treat it as an MCP request
+      // Handle MCP requests sent to SSE endpoint
+      // This supports hybrid SSE+HTTP approach where:
+      // - SSE is used for server-to-client messages
+      // - HTTP POST is used for client-to-server requests
       await this.handleMcpRequest(req, res);
+    });
+
+    // Handle SSE with query parameters for MCP requests
+    app.get("/sse/:method", async (req: Request, res: Response) => {
+      const method = req.params.method;
+      this.logger.info(`SSE GET request with method: ${method}`);
+      
+      // Convert GET request to MCP format
+      const mcpRequest = {
+        jsonrpc: "2.0",
+        method: method,
+        params: req.query,
+        id: Date.now()
+      };
+      
+      // Create a mock request object for MCP handler
+      const mockReq = {
+        ...req,
+        body: mcpRequest,
+        method: 'POST'
+      } as Request;
+      
+      await this.handleMcpRequest(mockReq, res);
     });
 
     // Handle SSE OPTIONS for CORS
