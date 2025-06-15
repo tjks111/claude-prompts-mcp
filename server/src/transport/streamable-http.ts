@@ -79,12 +79,45 @@ export class StreamableHttpTransport {
     this.app.post('/routes', (req, res) => this.handlePost(req, res));
     this.app.get('/routes', (req, res) => {
       res.json({
-        routes: { mcp: '/mcp' },
-        transports: ['streamable-http'],
+        routes: { 
+          mcp: '/mcp',
+          http: '/mcp',  // Point HTTP transport to new endpoint
+          sse: '/sse',   // Keep SSE endpoint for compatibility
+          health: '/health'
+        },
+        transports: ['streamable-http', 'http', 'sse'],
         protocol: '2025-03-26',
         serverInfo: { name: 'claude-prompts-mcp', version: '1.0.7' }
       });
     });
+
+    // Traditional HTTP endpoint compatibility (redirect to /mcp)
+    this.app.post('/', (req, res) => this.handlePost(req, res));
+    this.app.post('/http', (req, res) => this.handlePost(req, res));
+    this.app.post('/rpc', (req, res) => this.handlePost(req, res));
+
+    // SSE endpoint compatibility
+    this.app.get('/sse', (req, res) => {
+      // Set SSE headers
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      // Send initial connection message
+      res.write('data: {"jsonrpc":"2.0","method":"connection","params":{"status":"connected","transport":"sse","protocol":"2025-03-26"}}\n\n');
+      
+      // Keep connection alive with periodic pings
+      const pingInterval = setInterval(() => {
+        res.write('data: {"jsonrpc":"2.0","method":"ping","params":{"timestamp":"' + new Date().toISOString() + '"}}\n\n');
+      }, 30000);
+
+      // Clean up on disconnect
+      req.on('close', () => {
+        clearInterval(pingInterval);
+      });
+    });
+
+    this.app.post('/sse', (req, res) => this.handlePost(req, res));
   }
 
   private async handlePost(req: Request, res: Response): Promise<void> {
